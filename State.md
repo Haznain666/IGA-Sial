@@ -101,8 +101,7 @@ Partial payments were switched on, exercised end to end, and switched back off a
   available" chip; the Rs 165,000 Chaff Cutter (below the 200k equipment minimum) correctly did not.
 - A Rs 40,000 partial on Noor (Rs 120,000) → ledger row `is_partial`, status `partial`, remaining
   Rs 80,000, **`value_pkr` never mutated**. Item stayed publicly visible.
-- Chip behaviour matches spec §5b exactly: nothing shown while pending; only after admin confirmation did
-  "Partially sponsored · Rs 80,000 left" appear.
+- Chip behaviour (NOTE: superseded — see "Chip states" below; pending items now show a chip too).
 - Amount input is bound to **remaining**, not full value (`min=1 max=80000` after the first payment), and
   the sponsor page defaults to the remaining balance.
 - Over-sponsorship (Rs 100,000 against Rs 80,000 remaining) is blocked client-side in `handleSubmit`
@@ -113,6 +112,23 @@ Partial payments were switched on, exercised end to end, and switched back off a
 - Confirmations card is 404px vs 861px public, no main image, thumbnails 34×42 magnifying to 178×222 on
   hover (spec §7). Recipient modal focuses the first field and holds focus while typing (Gotchas §10).
 - All QA rows deleted afterwards; ledger empty, all 9 products `available`, partial toggles back off.
+
+**Chip states (current spec — supersedes the earlier §5b "nothing until confirmed" rule).**
+`src/components/PartialChips.jsx` renders exactly ONE chip, in priority order:
+
+| Condition | Chip |
+|---|---|
+| `confirmed > 0` and balance open | **Partially sponsored · Rs X left** |
+| `pending > 0`, nothing confirmed yet | **Partially reserved · Rs X left** |
+| Qualifies, nothing committed | **Partial sponsorship available** |
+
+Only one chip shows because **card height is a hard design constant** — a second chip wraps on narrow
+cards and breaks it. Chips are `whitespace-nowrap`; verified no overflow at 375px (widest chip 197px).
+
+The **remaining balance** is shown on all three public surfaces: home carousels, `/select`, and the
+`/sponsor` checkout ("Rs X available to sponsor"). There is **no separate product detail route** —
+`/select` is the detail surface. All amounts are the DERIVED remaining balance; **`value_pkr` is never
+modified by a sponsorship**, and the item's real value stays displayed alongside.
 
 **Fixed (was a defect):** partial-sponsorship chips were rendered **inline in `ProductCard` only**, so
 the home-page **Meet the Herd** and **Equipment** carousels — which have their own markup — showed no
