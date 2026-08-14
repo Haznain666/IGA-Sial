@@ -114,6 +114,13 @@ Partial payments were switched on, exercised end to end, and switched back off a
   hover (spec §7). Recipient modal focuses the first field and holds focus while typing (Gotchas §10).
 - All QA rows deleted afterwards; ledger empty, all 9 products `available`, partial toggles back off.
 
+**Fixed (was a defect):** partial-sponsorship chips were rendered **inline in `ProductCard` only**, so
+the home-page **Meet the Herd** and **Equipment** carousels — which have their own markup — showed no
+chips even when an item qualified. Now extracted into **`src/components/PartialChips.jsx`**, the single
+source of truth, used by ProductCard *and* both carousels.
+**If you add another surface that renders a product, render `<PartialChips>` on it too** — that drift is
+exactly what caused this bug.
+
 **Fixed (was a defect):** four `[role="switch"]` toggles reached screen readers with **no accessible
 name**. Root cause: they used `<label htmlFor={id}>`, but a `<button role="switch">` is **not a labelable
 element**, so `htmlFor` bound to nothing. Now wired with `aria-labelledby` + `aria-describedby`.
