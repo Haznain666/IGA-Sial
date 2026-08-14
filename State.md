@@ -55,12 +55,18 @@ npm run preview      # preview the built dist
 | | |
 |---|---|
 | Repo | [Haznain666/IGA-Sial](https://github.com/Haznain666/IGA-Sial) (renamed from the misspelled `IAG-Sial`) |
-| Live (interim) | https://haznain666.github.io/IGA-Sial/ — auto-deploys from `main` via `.github/workflows/pages.yml` |
-| Intended host | **Hostinger** — blocked, see §12 |
-| CI | `.github/workflows/ci.yml` runs `npm ci && npm run build` on every push/PR |
+| Production | **https://igasial.codexmill.com** — Hostinger, tracking the `deploy` branch |
+| Staging | https://haznain666.github.io/IGA-Sial/ — Pages, from `main` via `pages.yml` |
+| CI | `ci.yml` builds on every push/PR; `deploy-branch.yml` publishes the build; `pages.yml` deploys staging |
 
-HashRouter ⇒ no SPA rewrite rules needed anywhere. GitHub Pages serves from a subpath, so CI sets
-`BASE_PATH=/IGA-Sial/` and `vite.config.js` reads it; a root-domain host (Hostinger) needs no base at all.
+**Branches:** `main` is the source of truth. **`deploy` holds build output only** and is force-pushed by
+`.github/workflows/deploy-branch.yml` on every push to `main` — never commit to it by hand. Hostinger
+clones a repo but does **not** run a build, which is why the `deploy` branch exists; pointing Hostinger
+at `main` would serve the unbuilt source tree.
+
+HashRouter ⇒ no SPA rewrite rules needed anywhere; do **not** add a `.htaccess` rewrite. GitHub Pages
+serves from a subpath so `pages.yml` sets `BASE_PATH=/IGA-Sial/`; `igasial.codexmill.com` is a subdomain
+with its own document root, so `deploy-branch.yml` deliberately sets no BASE_PATH (base stays `/`).
 
 ---
 
@@ -125,11 +131,12 @@ sponsor page's "Partial sponsor".
   **Gotcha:** Resend rejects every send until the domain is marked Verified in its dashboard — correct
   DNS records are not enough, someone must press Verify. That failure surfaces as a bare `500` on
   `/auth/v1/invite`; the real message is in Auth Logs.
-- ⛔ **Hostinger deploy blocked** — the Hostinger MCP connector returns `Unauthenticated`. Needs an API
-  token (hPanel → API) in the MCP config. GitHub Pages is the interim host meanwhile.
-- **Re-point Supabase Auth URLs when hosting moves.** Site URL and the redirect allow-list currently
-  target the Pages deploy; update both when the site lands on its final domain, or invite and reset links
-  will point at the wrong origin.
+- **Supabase Auth URLs point at production.** Site URL = `https://igasial.codexmill.com`; the redirect
+  allow-list holds both `https://igasial.codexmill.com/**` and the Pages URL (kept for staging).
+- ⛔ **Hostinger MCP connector still returns `Unauthenticated`** — irrelevant now that deployment goes
+  through Git, but it means Claude cannot inspect or manage the hosting account directly. Add an API
+  token (hPanel → API) to the MCP config if that is ever wanted.
+- Hostinger's Git deployment must target the **subdomain's own document root**, not `public_html`.
 
 ---
 
