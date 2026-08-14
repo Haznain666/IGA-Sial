@@ -1,13 +1,28 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
-import { initialState, defaultSettings } from '../data/seed.js'
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
 import { uid } from '../lib/helpers.js'
 import { ToastProvider } from './ToastContext.jsx'
-import { firebaseEnabled } from '../firebase/config.js'
-import * as fb from '../firebase/api.js'
+import * as api from '../supabase/api.js'
+import { onAuthChange, getSession } from '../supabase/api.js'
 
-const STORAGE_KEY = 'iga-sial-state-v1'
 const CART_KEY = 'iga-cart'
 const MAX_BANKS = 5
+
+// Placeholder until the real settings row arrives, so first paint never
+// dereferences undefined.
+const EMPTY_SETTINGS = {
+  multiSelect: true,
+  gatherRecipientInfo: true,
+  collectOwnerInfo: true,
+  reservationDays: 7,
+  terms: '',
+  banks: [],
+  fxRates: { USD: 278.5, AUD: 183, SAR: 74.3 },
+  partialEnabled: false,
+  partialLivestockEnabled: false,
+  partialLivestockMin: 0,
+  partialEquipmentEnabled: false,
+  partialEquipmentMin: 0,
+}
 
 const AppContext = createContext(null)
 
@@ -27,106 +42,18 @@ function loadCart() {
   }
 }
 
-function loadLocal() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { products: initialState.products, settings: initialState.settings, donations: [] }
-    const parsed = JSON.parse(raw)
-    if (!parsed || parsed.version !== initialState.version) {
-      return { products: initialState.products, settings: initialState.settings, donations: [] }
-    }
-    return {
-      products: Array.isArray(parsed.products) ? parsed.products : initialState.products,
-      settings: { ...initialState.settings, ...(parsed.settings || {}) },
-      donations: Array.isArray(parsed.donations) ? parsed.donations : [],
-    }
-  } catch {
-    return { products: initialState.products, settings: initialState.settings, donations: [] }
-  }
-}
-
-function baseState() {
-  const cart = loadCart()
-  if (firebaseEnabled) {
-    return { products: [], settings: defaultSettings, donations: [], cart, loading: true }
-  }
-  return { ...loadLocal(), cart, loading: false }
-}
-
-function buildDonationRecord(product, recipient) {
-  return {
-    id: uid('don'),
-    productId: product.id,
-    productName: product.name,
-    productType: product.type,
-    breed: product.breed || '',
-    image: product.images?.[0] || null,
-    amountPKR: product.valuePKR,
-    donor: product.reservation?.donor || null,
-    bankId: product.reservation?.bankId || null,
-    recipient: recipient || null,
-    reservedAt: product.reservation?.reservedAt || null,
-    confirmedAt: new Date().toISOString(),
-  }
-}
-
 function reducer(state, action) {
   switch (action.type) {
-    // ---- realtime (Firebase) snapshots ----
     case 'SET_PRODUCTS':
       return { ...state, products: action.products, loading: false }
-    case 'SET_DONATIONS':
-      return { ...state, donations: action.donations }
-    case 'SET_SETTINGS_DOC':
-      return { ...state, settings: { ...defaultSettings, ...(action.settings || {}) } }
-
-    // ---- local mutations ----
-    case 'ADD_PRODUCT':
-      return { ...state, products: [action.product, ...state.products] }
-    case 'UPDATE_PRODUCT':
-      return {
-        ...state,
-        products: state.products.map((p) => (p.id === action.id ? { ...p, ...action.patch } : p)),
-      }
-    case 'DELETE_PRODUCT':
-      return { ...state, products: state.products.filter((p) => p.id !== action.id) }
+    case 'SET_SPONSORSHIPS':
+      return { ...state, sponsorships: action.sponsorships }
     case 'SET_SETTINGS':
-      return { ...state, settings: { ...state.settings, ...action.patch } }
-    case 'RESERVE': {
-      const reservedAt = new Date().toISOString()
-      return {
-        ...state,
-        products: state.products.map((p) =>
-          action.ids.includes(p.id) && p.status === 'available'
-            ? { ...p, status: 'reserved', reservation: { donor: action.donor, bankId: action.bankId || null, reservedAt } }
-            : p,
-        ),
-      }
-    }
-    case 'CANCEL_RESERVATION':
-      return {
-        ...state,
-        products: state.products.map((p) =>
-          p.id === action.id ? { ...p, status: 'available', reservation: null } : p,
-        ),
-      }
-    case 'CONFIRM_DONATION':
-      return {
-        ...state,
-        products: state.products.map((p) =>
-          p.id === action.id ? { ...p, status: 'donated', donation: action.record } : p,
-        ),
-        donations: [action.record, ...state.donations],
-      }
-    case 'RESET':
-      return {
-        ...state,
-        products: initialState.products.map((p) => ({ ...p })),
-        settings: { ...initialState.settings },
-        donations: [],
-      }
+      return { ...state, settings: action.settings }
+    case 'SET_SESSION':
+      return { ...state, session: action.session, authLoading: false }
 
-    // ---- cart (always local) ----
+    // ---- cart (always per-browser) ----
     case 'CART_TOGGLE': {
       const inCart = state.cart.includes(action.id)
       return {
@@ -146,62 +73,109 @@ function reducer(state, action) {
   }
 }
 
+// Availability is DERIVED from the sponsorship ledger — it mirrors the
+// `product_status` view exactly, but computed client-side so realtime updates
+// stay instant (Postgres views don't emit change events).
+function money(product, rows) {
+  const value = Number(product?.valuePKR) || 0
+  let confirmed = 0
+  let pending = 0
+  rows.forEach((s) => {
+    if (s.status === 'confirmed') confirmed += Number(s.amountPKR) || 0
+    else if (s.status === 'pending') pending += Number(s.amountPKR) || 0
+  })
+  const committed = confirmed + pending
+  const status =
+    confirmed >= value && value > 0
+      ? 'sponsored'
+      : committed >= value && value > 0
+        ? 'reserved'
+        : committed > 0
+          ? 'partial'
+          : 'available'
+  return { value, confirmed, pending, committed, remaining: Math.max(0, value - committed), status }
+}
+
 export function AppProvider({ children }) {
-  const [state, dispatch] = useReducer(reducer, undefined, baseState)
+  const [state, dispatch] = useReducer(reducer, undefined, () => ({
+    products: [],
+    sponsorships: [],
+    settings: EMPTY_SETTINGS,
+    cart: loadCart(),
+    loading: true,
+    session: null,
+    authLoading: true,
+  }))
   const stateRef = useRef(state)
   stateRef.current = state
 
-  // Firebase realtime subscriptions (global mode)
-  useEffect(() => {
-    if (!firebaseEnabled) return
-    fb.seedIfEmpty().catch((e) => console.error('Seed failed:', e))
-    const unsubs = [
-      fb.subscribeProducts((products) => dispatch({ type: 'SET_PRODUCTS', products })),
-      fb.subscribeSettings((settings) => settings && dispatch({ type: 'SET_SETTINGS_DOC', settings })),
-      fb.subscribeDonations((donations) => dispatch({ type: 'SET_DONATIONS', donations })),
-    ]
-    return () => unsubs.forEach((u) => u && u())
+  const reloadProducts = useCallback(async () => {
+    try {
+      dispatch({ type: 'SET_PRODUCTS', products: await api.fetchProducts() })
+    } catch (e) {
+      console.error('Could not load products:', e)
+      dispatch({ type: 'SET_PRODUCTS', products: [] })
+    }
   }, [])
 
-  // Local persistence (fallback mode)
-  useEffect(() => {
-    if (firebaseEnabled) return
+  const reloadSponsorships = useCallback(async () => {
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          version: initialState.version,
-          products: state.products,
-          settings: state.settings,
-          donations: state.donations,
-        }),
-      )
-    } catch {
-      /* ignore quota errors */
+      dispatch({ type: 'SET_SPONSORSHIPS', sponsorships: await api.fetchSponsorships() })
+    } catch (e) {
+      console.error('Could not load sponsorships:', e)
     }
-  }, [state.products, state.settings, state.donations])
+  }, [])
 
-  // Cart persists locally in both modes
+  const reloadSettings = useCallback(async () => {
+    try {
+      dispatch({ type: 'SET_SETTINGS', settings: await api.fetchSettings() })
+    } catch (e) {
+      console.error('Could not load settings:', e)
+    }
+  }, [])
+
+  // Initial load + realtime subscriptions. An admin change lands on every
+  // visitor's screen, the way the old Firestore listeners behaved.
+  useEffect(() => {
+    reloadProducts()
+    reloadSponsorships()
+    reloadSettings()
+    const unsubs = [
+      api.subscribeProducts(reloadProducts),
+      api.subscribeSponsorships(reloadSponsorships),
+      api.subscribeSettings(reloadSettings),
+    ]
+    return () => unsubs.forEach((u) => u && u())
+  }, [reloadProducts, reloadSponsorships, reloadSettings])
+
+  // Auth session (Super Admin gate)
+  useEffect(() => {
+    getSession().then((session) => dispatch({ type: 'SET_SESSION', session }))
+    return onAuthChange((session) => dispatch({ type: 'SET_SESSION', session }))
+  }, [])
+
+  // Cart persists locally — it's a donor's in-progress selection.
   useEffect(() => {
     try {
       localStorage.setItem(CART_KEY, JSON.stringify(state.cart))
     } catch {
-      /* ignore */
+      /* ignore quota errors */
     }
   }, [state.cart])
 
-  // Auto-release reserved animals once their hold time expires (0 = never).
+  // Auto-release sweep: any PENDING sponsorship older than the hold time is
+  // released, freeing its amount back to the product (0 = never).
   useEffect(() => {
     const days = Number(state.settings.reservationDays) || 0
     if (days <= 0) return
     const sweep = () => {
       const cutoff = Date.now() - days * 86400000
-      stateRef.current.products.forEach((p) => {
-        if (p.status !== 'reserved' || !p.reservation?.reservedAt) return
-        const t = new Date(p.reservation.reservedAt).getTime()
+      stateRef.current.sponsorships.forEach((s) => {
+        if (s.status !== 'pending' || !s.reservedAt) return
+        const t = new Date(s.reservedAt).getTime()
         if (Number.isFinite(t) && t < cutoff) {
-          if (firebaseEnabled) fb.fbUpdateProduct(p.id, { status: 'available', reservation: null })
-          else dispatch({ type: 'CANCEL_RESERVATION', id: p.id })
+          // Only an authenticated admin can write this (RLS); anon sweeps no-op.
+          api.setSponsorshipStatus(s.id, 'released').catch(() => {})
         }
       })
     }
@@ -210,54 +184,45 @@ export function AppProvider({ children }) {
     return () => clearInterval(interval)
   }, [state.settings.reservationDays])
 
-  const actions = useMemo(() => {
-    const writeSettings = (patch) => {
-      if (firebaseEnabled) fb.fbSetSettings(patch)
-      else dispatch({ type: 'SET_SETTINGS', patch })
-    }
-    return {
-      addProduct: (product) => {
-        const record = {
-          id: uid('cow'),
-          status: 'available',
-          reservation: null,
-          donation: null,
-          createdAt: new Date().toISOString(),
-          ...product,
-        }
-        if (firebaseEnabled) fb.fbSetProduct(record)
-        else dispatch({ type: 'ADD_PRODUCT', product: record })
-        return record.id
+  const actions = useMemo(
+    () => ({
+      addProduct: async (product) => {
+        const prefix = product.kind === 'equipment' ? 'eq' : 'cow'
+        const created = await api.createProduct({ id: uid(prefix), ...product })
+        await reloadProducts()
+        return created.id
       },
-      updateProduct: (id, patch) => {
-        // Reserved animals are locked until released.
-        const existing = stateRef.current.products.find((x) => x.id === id)
-        if (existing && existing.status === 'reserved') return
-        if (firebaseEnabled) fb.fbUpdateProduct(id, patch)
-        else dispatch({ type: 'UPDATE_PRODUCT', id, patch })
+      updateProduct: async (id, patch) => {
+        const updated = await api.updateProduct(id, patch)
+        await reloadProducts()
+        return updated
       },
-      deleteProduct: (id) => {
-        const existing = stateRef.current.products.find((x) => x.id === id)
-        if (existing && existing.status === 'reserved') return
-        if (firebaseEnabled) fb.fbDeleteProduct(id)
-        else dispatch({ type: 'DELETE_PRODUCT', id })
+      deleteProduct: async (id) => {
+        await api.deleteProduct(id)
         dispatch({ type: 'CART_REMOVE', id })
+        await reloadProducts()
       },
 
-      setSettings: writeSettings,
-      addBank: (bank) => {
+      setSettings: async (patch) => {
+        const next = await api.saveSettings(patch)
+        if (next) dispatch({ type: 'SET_SETTINGS', settings: next })
+      },
+      addBank: async (bank) => {
         const banks = stateRef.current.settings.banks || []
         if (banks.length >= MAX_BANKS) return false
-        writeSettings({ banks: [...banks, { id: uid('bank'), ...bank }] })
+        const next = await api.saveSettings({ banks: [...banks, { id: uid('bank'), ...bank }] })
+        if (next) dispatch({ type: 'SET_SETTINGS', settings: next })
         return true
       },
-      updateBank: (id, patch) => {
+      updateBank: async (id, patch) => {
         const banks = stateRef.current.settings.banks || []
-        writeSettings({ banks: banks.map((b) => (b.id === id ? { ...b, ...patch } : b)) })
+        const next = await api.saveSettings({ banks: banks.map((b) => (b.id === id ? { ...b, ...patch } : b)) })
+        if (next) dispatch({ type: 'SET_SETTINGS', settings: next })
       },
-      deleteBank: (id) => {
+      deleteBank: async (id) => {
         const banks = stateRef.current.settings.banks || []
-        writeSettings({ banks: banks.filter((b) => b.id !== id) })
+        const next = await api.saveSettings({ banks: banks.filter((b) => b.id !== id) })
+        if (next) dispatch({ type: 'SET_SETTINGS', settings: next })
       },
 
       toggleCart: (id) => dispatch({ type: 'CART_TOGGLE', id }),
@@ -265,48 +230,96 @@ export function AppProvider({ children }) {
       removeFromCart: (id) => dispatch({ type: 'CART_REMOVE', id }),
       clearCart: () => dispatch({ type: 'CART_CLEAR' }),
 
-      reserve: (ids, donor, bankId) => {
-        if (firebaseEnabled) {
-          fb.fbReserve(ids, { donor, bankId: bankId || null, reservedAt: new Date().toISOString() })
-        } else {
-          dispatch({ type: 'RESERVE', ids, donor, bankId })
-        }
+      // items: [{ productId, amountPKR, isPartial }]
+      sponsor: async (items, donor, bankId) => {
+        const rows = items.map((it) => ({
+          id: uid('spn'),
+          productId: it.productId,
+          donor,
+          bankId: bankId || null,
+          amountPKR: it.amountPKR,
+          isPartial: !!it.isPartial,
+        }))
+        const created = await api.createSponsorships(rows)
         dispatch({ type: 'CART_CLEAR' })
+        await reloadSponsorships()
+        return created
       },
-      cancelReservation: (id) => {
-        if (firebaseEnabled) fb.fbUpdateProduct(id, { status: 'available', reservation: null })
-        else dispatch({ type: 'CANCEL_RESERVATION', id })
+      confirmSponsorship: async (id, recipient) => {
+        await api.confirmSponsorship(id, recipient)
+        await reloadSponsorships()
       },
-      confirmDonation: (id, recipient) => {
-        const product = stateRef.current.products.find((p) => p.id === id)
-        if (!product || product.status !== 'reserved') return
-        const record = buildDonationRecord(product, recipient)
-        if (firebaseEnabled) fb.fbConfirm(id, record)
-        else dispatch({ type: 'CONFIRM_DONATION', id, record })
+      cancelSponsorship: async (id) => {
+        await api.setSponsorshipStatus(id, 'cancelled')
+        await reloadSponsorships()
+      },
+      releaseSponsorship: async (id) => {
+        await api.setSponsorshipStatus(id, 'released')
+        await reloadSponsorships()
       },
 
-      resetDemo: () => {
-        if (firebaseEnabled) fb.fbResetAll().catch((e) => console.error('Reset failed:', e))
-        else dispatch({ type: 'RESET' })
-        dispatch({ type: 'CART_CLEAR' })
-      },
+      signIn: (email, password) => api.signIn(email, password),
+      signOut: () => api.signOut(),
+    }),
+    [reloadProducts, reloadSponsorships],
+  )
+
+  const value = useMemo(() => {
+    const { products, sponsorships, settings } = state
+
+    // One pass over the ledger, then every helper is an O(1) lookup.
+    const byProduct = new Map()
+    sponsorships.forEach((s) => {
+      if (!byProduct.has(s.productId)) byProduct.set(s.productId, [])
+      byProduct.get(s.productId).push(s)
+    })
+    const stats = new Map()
+    products.forEach((p) => stats.set(p.id, money(p, byProduct.get(p.id) || [])))
+    const statOf = (id) => stats.get(id) || { value: 0, confirmed: 0, pending: 0, committed: 0, remaining: 0, status: 'available' }
+
+    const isPartialEligible = (product) => {
+      if (!product || !settings.partialEnabled) return false
+      if (product.kind === 'equipment') {
+        return settings.partialEquipmentEnabled && product.valuePKR >= (settings.partialEquipmentMin || 0)
+      }
+      return settings.partialLivestockEnabled && product.valuePKR >= (settings.partialLivestockMin || 0)
     }
-  }, [])
 
-  const value = useMemo(
-    () => ({
+    const openOf = (id) => (byProduct.get(id) || []).filter((s) => s.status === 'pending' || s.status === 'confirmed')
+
+    return {
       ...state,
       ...actions,
       MAX_BANKS,
-      dataMode: firebaseEnabled ? 'firebase' : 'local',
-      availableProducts: state.products.filter((p) => p.status === 'available'),
-      reservedProducts: state.products.filter((p) => p.status === 'reserved'),
-      donatedProducts: state.products.filter((p) => p.status === 'donated'),
-      bankById: (id) => state.settings.banks.find((b) => b.id === id) || null,
-      productById: (id) => state.products.find((p) => p.id === id) || null,
-    }),
-    [state, actions],
-  )
+      livestock: products.filter((p) => p.kind !== 'equipment'),
+      equipment: products.filter((p) => p.kind === 'equipment'),
+
+      statusOf: (id) => statOf(id).status,
+      remainingOf: (id) => statOf(id).remaining,
+      committedOf: (id) => statOf(id).committed,
+      confirmedOf: (id) => statOf(id).confirmed,
+      statsOf: statOf,
+      isPartialEligible,
+      hasOpenSponsorships: (id) => openOf(id).length > 0,
+
+      // Public site: anything still open for a contribution.
+      availableProducts: products.filter((p) => {
+        const s = statOf(p.id).status
+        return s === 'available' || s === 'partial'
+      }),
+      // Admin Confirmations: anything with money awaiting confirmation.
+      reservedProducts: products.filter((p) => (byProduct.get(p.id) || []).some((s) => s.status === 'pending')),
+      // Sponsorships Made: fully sponsored, every contribution confirmed.
+      completedProducts: products.filter((p) => statOf(p.id).status === 'sponsored'),
+
+      sponsorsOf: (id) => (byProduct.get(id) || []).filter((s) => s.status === 'confirmed'),
+      pendingOf: (id) => (byProduct.get(id) || []).filter((s) => s.status === 'pending'),
+      sponsorshipsOf: (id) => byProduct.get(id) || [],
+
+      bankById: (id) => (settings.banks || []).find((b) => b.id === id) || null,
+      productById: (id) => products.find((p) => p.id === id) || null,
+    }
+  }, [state, actions])
 
   return (
     <AppContext.Provider value={value}>
