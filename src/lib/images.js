@@ -75,3 +75,10 @@ export function fileToScaledDataURL(file, maxDim = 1200, quality = 0.82) {
     reader.readAsDataURL(file)
   })
 }
+
+// Resolves a file in public/ against the deploy base path. Hard-coding "/img/x.png"
+// breaks on hosts that serve the site from a subdirectory (GitHub Pages uses
+// /IGA-Sial/); Vite rewrites asset URLs it can see, but not string literals in JSX.
+export function assetUrl(path) {
+  return `${import.meta.env.BASE_URL}${String(path).replace(/^\/+/, '')}`
+}

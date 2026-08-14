@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom'
+import { assetUrl } from '../lib/images.js'
 
 // The one official IGA Sial Farm logo. `chip` wraps it in a light rounded
 // plate so it reads cleanly on dark surfaces (e.g. the footer).
 export default function Logo({ className = 'h-12', chip = false, to = '/' }) {
   const img = (
     <img
-      src="/logo.jpg"
+      src={assetUrl('logo.jpg')}
       alt="IGA Sial Farm"
       className={`${className} w-auto ${chip ? 'rounded-lg' : 'rounded-lg'}`}
       width="120"

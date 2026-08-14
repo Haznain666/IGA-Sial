@@ -3,6 +3,7 @@ import SectionHeading from '../components/SectionHeading.jsx'
 import Reveal from '../components/Reveal.jsx'
 import Lightbox from '../components/Lightbox.jsx'
 import { Check, Loader, Clock, Maximize2 } from 'lucide-react'
+import { assetUrl } from '../lib/images.js'
 
 const STAGES = [
   {
@@ -70,7 +71,7 @@ export default function MasterPlan() {
                 aria-label="Enlarge the site master plan"
               >
                 <img
-                  src="/img/masterplan.png"
+                  src={assetUrl('img/masterplan.png')}
                   alt="IGA Sial Farm site master plan showing residential, buffalo, goat, chiller, biogas, and storage blocks"
                   className="w-full object-cover"
                   loading="lazy"
@@ -116,7 +117,7 @@ export default function MasterPlan() {
 
       <Lightbox
         open={zoom}
-        images={['/img/masterplan.png']}
+        images={[assetUrl('img/masterplan.png')]}
         index={0}
         title="Site master plan — Waryam Wala, Punjab"
         onClose={() => setZoom(false)}

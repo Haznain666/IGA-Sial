@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Heart, ArrowDown, Sprout } from 'lucide-react'
+import { assetUrl } from '../lib/images.js'
 
 const STATS = [
   { value: '100%', label: 'Profits reinvested' },
@@ -23,7 +24,7 @@ export default function Hero() {
     <section className="relative overflow-hidden">
       <div className="absolute inset-0">
         <img
-          src="/img/hero-mosque.png"
+          src={assetUrl('img/hero-mosque.png')}
           alt="Sunrise over a village in Punjab with a herder guiding cattle across green fields"
           className="h-full w-full object-cover"
           fetchpriority="high"

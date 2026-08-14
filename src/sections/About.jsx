@@ -1,5 +1,6 @@
 import Reveal from '../components/Reveal.jsx'
 import { Heart, Leaf, Users } from 'lucide-react'
+import { assetUrl } from '../lib/images.js'
 
 const PILLARS = [
   { icon: Heart, label: 'Compassion', text: 'Built in loving memory, rooted in care.' },
@@ -54,7 +55,7 @@ export default function About() {
           <div className="relative">
             <div className="overflow-hidden rounded-3xl shadow-lift">
               <img
-                src="/img/aerial.png"
+                src={assetUrl('img/aerial.png')}
                 alt="Aerial view of IGA Sial Farm — cattle grazing beside an irrigation stream and green fields"
                 className="aspect-[4/3] w-full object-cover"
                 loading="lazy"
