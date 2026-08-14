@@ -1,24 +1,24 @@
 # IGA Sial Farm — Project State & Context
 
 > Handoff/context doc. Read this first when opening `D:\iga-sial-farm` in a new session.
-> Last updated: 2026-08-14.
+> Last updated: 2026-08-14 (Supabase migration + sponsorship ledger + partial payments + admin auth).
 
 ---
 
 ## 1. What this is
 
-A single-page **charity / donation website** for **IGA Sial Farm — Donate-a-Cow Program**
-(a not-for-profit dairy initiative in Waryam Wala, Punjab, Pakistan). Donors browse animals,
-"donate" one (or several) by paying, and the animal is gifted to a needy family. Content was
+A single-page **charity / sponsorship website** for **IGA Sial Farm** (a not-for-profit dairy initiative in
+Waryam Wala, Punjab, Pakistan). Sponsors browse **live stock** and **farm equipment**, sponsor one or
+several (in full or in part), and the item is gifted on their behalf to a needy family. Content was
 derived from the client's PowerPoint (`D:\IGA Sial\IGA_Sial_Farm_Donate_a_Cow_Presentation (v0.3).pptx`).
 
 **Two surfaces:**
-- **Public site** — marketing single-pager + the donation flow.
-- **Super Admin** — a control panel at a separate URL that manages everything (products, confirmations,
-  donation records, settings). No login yet (by client's choice, "for now").
+- **Public site** — marketing single-pager + the sponsorship flow.
+- **Super Admin** — a control panel at `/#/super-admin`, **behind Supabase Auth**, that manages
+  products, confirmations, sponsorship records, settings, and admin users.
 
-**Data is global via Firebase Firestore** (real-time, so an admin change shows for every visitor),
-with a **localStorage fallback** so the app still runs before Firebase is configured.
+**Data is global via Supabase Postgres** with **Realtime** subscriptions, so an admin change shows for
+every visitor. There is **no local fallback** any more — Supabase is always configured.
 
 ---
 
@@ -26,11 +26,13 @@ with a **localStorage fallback** so the app still runs before Firebase is config
 
 - **React 18** + **Vite 5** + **Tailwind CSS 3**
 - **react-router-dom 6** (HashRouter — URLs look like `/#/select`; no server rewrites needed on deploy)
+- **@supabase/supabase-js 2** (Postgres + Auth + Realtime)
 - **framer-motion** (reveals, modal/lightbox enter animation)
-- **embla-carousel-react** + **embla-carousel-autoplay** (herd carousel)
+- **embla-carousel-react** + **embla-carousel-autoplay** (herd + equipment carousels)
 - **lucide-react** (icons)
-- **firebase 12** (Firestore; app-level SDK)
 - Fonts: **Lexend** (headings) + **Source Sans 3** (body), via Google Fonts in `index.html`.
+
+Firebase is **gone** (dependency uninstalled, `src/firebase/` deleted).
 
 ---
 
@@ -38,151 +40,169 @@ with a **localStorage fallback** so the app still runs before Firebase is config
 
 ```bash
 cd D:\iga-sial-farm
-npm install          # if node_modules missing
+npm install
 npm run dev          # dev server, http://localhost:5180
 npm run build        # production build -> dist/
 npm run preview      # preview the built dist
 ```
 
-- Browser-preview launcher entry: **`iga-dev`** on port **4329** in `D:\.claude\launch.json`
-  (root shared launch.json used by the preview tool; project also has its own `.claude/launch.json`).
+- Env (`.env`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+  `vite.config.js` sets `envPrefix: ['VITE_', 'NEXT_PUBLIC_']` so `import.meta.env.NEXT_PUBLIC_*` works.
+- Browser-preview launcher entry: **`iga-dev`** (`.claude/launch.json`).
 - **Deploy:** client self-hosts. `npm run build`, upload `dist/`. HashRouter ⇒ no SPA rewrite rules needed.
-  Super Admin URL becomes `https://<site>/#/super-admin`.
 
 ---
 
 ## 4. Current status
 
-**Everything below is built and QA-verified in the browser. Production build passes clean (0 errors).**
+Built and browser-verified: Supabase data layer, Donation→Sponsorship ledger model, equipment, uniform
+product cards, partial payments, pagination, slim confirmation cards, Supabase Auth gate on Super Admin.
+`npm run build` passes with 0 errors.
 
-Done & verified:
-- Full public single-pager (all sections from the pptx).
-- Donation flow: select → donate → reserve (block) → **Thank-You page** with bank transfer details.
-- Super Admin area (Dashboard, Products CRUD, Confirmations, Donations Made, Settings).
-- Portrait 4:5 fixed image frame everywhere + per-image zoom/position adjustment in Manage Product.
-- Lightbox with prominent Close + prev/next + thumbnails.
-- Editable exchange rates (Settings) flowing to all prices.
-- Reserved-animal edit/delete lock; reservation auto-release after N days (Settings-configurable).
-- Modal focus bug fixed (see Gotchas).
-- Mobile-first pass — verified zero horizontal overflow at 375px on all key pages.
-- Dual-mode store (Firestore global / localStorage fallback), lazy-loaded admin chunks.
-
-**PENDING — the only open item:**
-- **User must paste their Firebase web config into `src/firebase/config.js`** to switch from
-  "Local preview" to "Global" mode. Until then it runs per-browser (a banner in Super Admin shows which
-  mode is active). User chose **Firebase** for data and **self-hosting** for deploy.
-- Optional/likely-next (not requested yet): add a passcode/login to Super Admin + lock down Firestore rules.
+**Open items:**
+- **No admin account exists yet.** Create the first user in the Supabase dashboard
+  (Authentication → Users → Add user, or send an invite). The `on_auth_user_created` trigger writes the
+  matching `admin_profiles` row automatically. After that, further admins can be invited in-app.
+- **Outbound email is not configured** in Supabase, so invites and password resets don't actually
+  arrive yet. The UI flows are built and wired; configure SMTP + the email templates to finish them.
+- The **password-reset email template must emit a 6-digit code** (`{{ .Token }}`), because the UI asks
+  for a code and calls `verifyOtp({ type: 'recovery' })`.
+- The **invite template should use `{{ .TokenHash }}`** in the link (see Gotchas — PKCE `code` only
+  works in the browser that started the flow).
+- Apply `supabase/migrations/0003_realtime.sql` if Realtime ever stops updating live.
+- A **QA test sponsorship** was created during verification (product `cow_noor`, sponsor
+  "QA Verification / qa-test@example.com", Rs 120,000, pending). Cancel it in
+  Super Admin → Confirmations, or it auto-releases after 7 days.
 
 ---
 
 ## 5. Architecture
 
-### Data layer — `src/store/AppContext.jsx` (the heart of the app)
-Single `useReducer` store exposed via `useApp()`. **Dual-mode**, decided by `firebaseEnabled` from
-`src/firebase/config.js`:
+### Data layer
 
-- **Firebase mode** (config present): `onSnapshot` subscriptions stream `products`, `donations`, and the
-  `config/app` settings doc into state (real-time, global). Action functions write to Firestore via
-  `src/firebase/api.js`; Firestore latency-compensation reflects writes immediately.
-- **Local mode** (no config): reducer mutations + `localStorage` persistence (key `iga-sial-state-v1`).
+- **`src/supabase/client.js`** — the configured client.
+  `auth: { persistSession: true, flowType: 'pkce', detectSessionInUrl: false }`.
+  `detectSessionInUrl` is **off** because HashRouter eats the fragment; the callback is handled by hand.
+- **`src/supabase/api.js`** — every read/write, plus the **snake_case ⇄ camelCase mapping**
+  (`toProduct` / `fromProduct`, `toSponsorship`, `toSettings` / `fromSettings`). Components never see
+  snake_case. Also holds `friendlyError()`, which turns the DB guard-trigger errors
+  (over-sponsoring, locked product, RLS) into human sentences for toasts.
+- **`src/store/AppContext.jsx`** — single `useReducer` store exposed via `useApp()`. Supabase-only.
+  On mount it fetches products / sponsorships / settings and opens three Realtime channels
+  (`postgres_changes` on each table); any change re-reads that table.
 
-`useApp()` returns the same shape in both modes, so components never branch on mode. It exposes:
-- state: `products`, `settings`, `cart`, `donations`, `loading`, `dataMode` (`'firebase'|'local'`), `MAX_BANKS`
-- selectors: `availableProducts`, `reservedProducts`, `donatedProducts`, `bankById(id)`, `productById(id)`
+`useApp()` exposes:
+- state: `products`, `livestock`, `equipment`, `sponsorships`, `settings`, `cart`, `loading`,
+  `session`, `authLoading`, `MAX_BANKS`
+- derived: `statusOf(id)`, `remainingOf(id)`, `committedOf(id)`, `confirmedOf(id)`, `statsOf(id)`,
+  `isPartialEligible(product)`, `hasOpenSponsorships(id)`, `availableProducts`, `reservedProducts`,
+  `completedProducts`, `sponsorsOf(id)`, `pendingOf(id)`, `sponsorshipsOf(id)`, `bankById`, `productById`
 - actions: `addProduct`, `updateProduct`, `deleteProduct`, `setSettings`, `addBank`, `updateBank`,
-  `deleteBank`, `toggleCart`, `setCart`, `removeFromCart`, `clearCart`, `reserve`, `cancelReservation`,
-  `confirmDonation`, `resetDemo`
+  `deleteBank`, `toggleCart`, `setCart`, `removeFromCart`, `clearCart`, `sponsor`,
+  `confirmSponsorship`, `cancelSponsorship`, `releaseSponsorship`, `signIn`, `signOut`
 
-**What's global vs local:** `products`, `settings`, `donations`, and reservations are global (Firestore).
-The **cart** is always per-browser (`localStorage` key `iga-cart`) — it's a donor's in-progress selection.
+**All action functions are async and can throw** — call sites wrap them in `try/catch` and toast
+`e.message`.
 
-**Two background effects in the provider:**
-- Local persistence (local mode only) + cart persistence (both modes).
-- **Reservation auto-release sweep**: every 60s (and on mount), any product with
-  `status==='reserved'` whose `reservation.reservedAt` is older than `settings.reservationDays` is reverted
-  to `available` (`0 = never`).
+**What's global vs local:** products, sponsorships, settings and admin users are global (Postgres).
+The **cart** is still per-browser (`localStorage` key `iga-cart`) — it's a sponsor's in-progress selection.
 
-### Firestore layout (when configured)
-- Collection `products` — one doc per animal (doc id = product id).
-- Collection `donations` — one doc per confirmed donation record.
-- Doc `config/app` — the single settings object.
-- `seedIfEmpty()` writes the 5 demo animals + default settings on first run if empty.
-- `fbResetAll()` powers the global "Reset demo data".
-- Needs Firestore in **test mode** / open rules for now (no auth).
+**Auto-release sweep:** every 60s (and on mount), any **pending** sponsorship older than
+`settings.reservationDays` is set to `released` (0 = never), freeing its amount. RLS means only an
+authenticated admin's browser actually performs the write; anon sweeps no-op silently.
+
+### Database (`supabase/migrations/`)
+
+- `0001_init.sql` — schema, view, guard triggers, RLS. `0002_seed.sql` — content. `0003_realtime.sql` —
+  adds the three tables to the `supabase_realtime` publication (idempotent).
+- **`products`** holds livestock AND equipment, discriminated by `kind` (`'livestock' | 'equipment'`).
+  Livestock uses breed/age/weight/type/owner; equipment uses warranty/life_span. Both use
+  name/details/images/value_pkr.
+- **`sponsorships`** is a **ledger** — many rows per product:
+  `{ id, product_id, donor, bank_id, amount_pkr, is_partial, status, recipient, reserved_at,
+  confirmed_at, cancelled_at }`, status ∈ `pending | confirmed | cancelled | released`.
+- **Availability is DERIVED, never stored.** The `product_status` view gives
+  `confirmed_pkr / pending_pkr / committed_pkr / remaining_pkr` and a status of
+  `available | partial | reserved | sponsored`. **A product's `value_pkr` is never mutated.**
+- **`app_settings`** is a single row (`id = 1`), snake_case columns.
+- **`admin_profiles`** mirrors `auth.users` via the `on_auth_user_created` trigger.
+- DB triggers enforce: no over-sponsoring, and no deleting a product with open (pending/confirmed)
+  sponsorships. Both surface as friendly toasts.
 
 ### Routing — `src/App.jsx`
-- `PublicLayout` (Header + Footer) wraps: `/` (Home), `/select` (Animal Selection), `/donation`
-  (donor form), `/thank-you`, and `*` (NotFound).
-- `SuperAdminLayout` (own chrome, NO public header/footer) wraps: `/super-admin` (Dashboard, index),
-  `/super-admin/products`, `/super-admin/confirmations`, `/super-admin/donations`, `/super-admin/settings`.
-- **Super Admin pages are `React.lazy`** (separate chunks) so the donor experience stays light.
-- Footer has **no** admin links — Super Admin is reached by typing the URL only.
+- `PublicLayout` wraps `/` (Home), `/select` (ProductSelection), `/sponsor` (SponsorPage),
+  `/thank-you`, `*` (NotFound). `/donation` redirects to `/sponsor` for old links.
+- `/auth/callback` (AuthCallback) and `/set-password` (SetPassword) are standalone lazy routes.
+- `SuperAdminLayout` wraps `/super-admin` (Dashboard, index), `products`, `confirmations`,
+  `sponsorships`, `settings`, `admin-users`. **The layout is the auth gate** — no session ⇒ it renders
+  `AdminAuth` instead of the panel, so every child route is protected in one place.
+- Super Admin pages are `React.lazy` (separate chunks).
 
 ---
 
-## 6. Data model
+## 6. Data model (app-side, camelCase)
 
 **Product**
 ```
-{ id, name, images: Image[], details (<=300), breed, age, weight,
-  type: 'Calf'|'Heifer'|'Cow'|'Bull',
-  valuePKR: number,                       // auto-converts to USD/AUD/SAR via settings.fxRates
-  owner: { ownedByFarm: bool, firstName, lastName, cnic, phone, email },
-  status: 'available'|'reserved'|'donated',
-  reservation: null | { donor:{firstName,lastName,email,phone}, bankId, reservedAt(ISO) },
-  donation:    null | <donation record>,  // set when confirmed
-  createdAt(ISO) }
+{ id, kind: 'livestock'|'equipment', name, details (<=300), images: Image[], valuePKR,
+  breed, age, weight, type: 'Calf'|'Heifer'|'Cow'|'Bull',      // livestock
+  owner: { ownedByFarm, firstName, lastName, cnic, phone, email },
+  warranty, lifeSpan,                                           // equipment
+  archived, createdAt }
 ```
 
-**Image** (portrait model — see `src/lib/images.js`)
+**Sponsorship**
 ```
-{ url, zoom(1..2.5), posX(0..100), posY(0..100) }   // legacy plain strings are auto-normalized
-```
-Helpers: `normalizeImage`, `imageUrl(img)`, `firstImageUrl(product)`, `imageStyle(img)` (returns
-`objectPosition` + `transform:scale`), `fileToScaledDataURL(file)` (canvas downscale on upload),
-`PORTRAIT_ASPECT = '4 / 5'`.
-
-**Settings** (`config/app` doc / `settings` in local state)
-```
-{ multiSelect: bool,           // Animal Selection: multi-select cart vs single "Donate now"
-  gatherRecipientInfo: bool,   // Confirm Donation: show recipient popup (else confirm directly)
-  collectOwnerInfo: bool,      // Manage Product: capture villager owner (else default IGA Sial Farm)
-  reservationDays: number,     // auto-release reserved animals after N days (0 = never). default 7
-  terms: string,               // T&C shown on donation page
-  banks: Bank[] (max 5),       // shown in donation-page dropdown
-  fxRates: { USD, AUD, SAR } }  // PKR per 1 unit; editable in Settings
+{ id, productId, donor:{firstName,lastName,email,phone}, bankId, amountPKR, isPartial,
+  status: 'pending'|'confirmed'|'cancelled'|'released',
+  recipient: null | {firstName,lastName,cnic,phone,email},
+  reservedAt, confirmedAt, cancelledAt, createdAt }
 ```
 
-**Bank**: `{ id, bankName, accountTitle, accountNumber, iban, swift, branch, currency }`
+**Image** (portrait model — `src/lib/images.js`, unchanged)
+`{ url, zoom(1..2.5), posX(0..100), posY(0..100) }`; helpers `normalizeImage(s)`, `imageUrl`,
+`firstImageUrl`, `imageStyle`, `fileToScaledDataURL`, `PORTRAIT_ASPECT = '4 / 5'`.
 
-**Donation record** (built in `buildDonationRecord`, stored in `donations`):
-`{ id, productId, productName, productType, breed, image, amountPKR, donor, bankId, recipient|null,
-   reservedAt, confirmedAt }`
+**Settings**
+```
+{ multiSelect, gatherRecipientInfo, collectOwnerInfo, reservationDays, terms, banks[], fxRates,
+  partialEnabled, partialLivestockEnabled, partialLivestockMin,
+  partialEquipmentEnabled, partialEquipmentMin }
+```
 
-**Currency** (`src/lib/currency.js`): `DEFAULT_FX = {USD:278.5, AUD:183, SAR:74.3}` (PKR per unit),
-`convertFromPKR(pkr, rates)`, `formatMoney(amount, cur)`. `CurrencyPills` reads live rates from context.
+**Partial eligibility:** `partialEnabled && <category>Enabled && valuePKR >= <category>Min`.
 
 ---
 
 ## 7. Key flows & behaviors
 
-- **Home carousel (Herd)** — up to 5 available animals, live from store, clickable → lightbox, "Donate now" → `/select`.
-- **Animal Selection (`/select`)** — all available animals, paginated (6/page).
-  `settings.multiSelect` on ⇒ checkbox + "Add to donation" + floating cart bar; off ⇒ per-card "Donate now".
-- **Donation page (`/donation`)** — donor form (first/last/email/phone, validated), total in 4 currencies,
-  T&C accept checkbox, bank dropdown (details shown). "Proceed" reserves the cart's animals (blocks them,
-  attaches donor to `reservation`) and routes the donor to **`/thank-you`** (NOT the admin page).
-- **Reserved animals** disappear from Home + Animal Selection; appear in Super Admin → Confirmations.
-- **Confirm Donation (super-admin)** — per reserved card: **Confirm** (if `gatherRecipientInfo` on, opens a
-  recipient popup — first/last name required, CNIC/phone/email optional; else confirms directly) or
-  **Cancel** (release back to available). Cards show an "Auto-releases in X days" countdown.
-- **Donations Made (super-admin)** — records with animal + donor + recipient + bank + dates; summary stats.
-- **Manage Product (super-admin)** — CRUD. Up to 5 portrait images (upload OR paste URL) with per-image
-  zoom/horizontal/vertical sliders + Reset. Name, details(≤300), breed, age, weight, type dropdown, PKR value
-  with live FX. Owner section gated by `collectOwnerInfo`. **Reserved animals are locked** (no edit/delete
-  until released — enforced in UI *and* in the store actions).
-- **Settings (super-admin)** — the 3 toggles, Reservation hold time, Exchange rates, Terms editor, Banks
-  (max 5), Reset demo data (global in Firebase mode).
+- **Home** — Hero, About, Concept, Highlights, Process, **Herd** (livestock carousel),
+  **Equipment** (equipment carousel), Transparency, MasterPlan, Contact.
+- **Selection (`/select`)** — all available live stock + equipment, a category filter
+  (Everything / Live Stock / Equipment), **paginated 6/page**. `settings.multiSelect` on ⇒ checkbox +
+  "Add to sponsorship" + floating cart bar; off ⇒ per-card "Sponsor now".
+- **Sponsor page (`/sponsor`)** — sponsor form, T&C, bank dropdown, and per-item **Partial Sponsor**
+  toggle for eligible items (with an explanatory line). Amount is validated `> 0` and
+  `<= remaining` (not the full value); the remaining amount is always shown. "Proceed" inserts one
+  **pending** sponsorship row per item and routes to `/thank-you`.
+- **Hidden when full:** a product disappears from the public site once *committed* (pending +
+  confirmed) reaches its value. Cancel / release / auto-release frees the amount and it reappears.
+- **Confirmations (super-admin)** — one **compact** card per *pending sponsorship* (not per product):
+  no hero image, no lightbox, just small thumbnails that **magnify on hover/focus**, plus amount,
+  remaining, sponsor contact, reserved date and the auto-release countdown. Paginated 6/page.
+  Confirm opens the recipient popup when `gatherRecipientInfo` is on.
+- **Sponsorships Made (super-admin)** — a product appears **once**, only when fully sponsored with
+  every contribution confirmed. The card lists **all** sponsors with contact details and each one's
+  amount, plus the recipient.
+- **Manage Products (super-admin)** — two tabs, **Animal Profile** and **Equipment**, each with its own
+  Add button and editor fields. Both use the **same** `ImageManager` (up to 5 portrait images with
+  per-image zoom / horizontal / vertical sliders + Reset). Products with open sponsorships hide the
+  edit/delete controls and explain why.
+- **Settings (super-admin)** — sponsorship toggles, **Partial Payment** (master toggle + independent
+  toggle & PKR threshold for Live Stock and Equipment), reservation hold time, exchange rates, terms,
+  banks (max 5).
+- **Admin Users (super-admin)** — list `admin_profiles`, invite by email, edit name/role,
+  deactivate/reactivate, delete. You can't deactivate or delete yourself.
 
 ---
 
@@ -191,49 +211,49 @@ Helpers: `normalizeImage`, `imageUrl(img)`, `firstImageUrl(product)`, `imageStyl
 ```
 src/
   main.jsx                      # entry: HashRouter > AppProvider > App
-  App.jsx                       # routes; PublicLayout + lazy SuperAdmin routes
+  App.jsx                       # routes; PublicLayout + auth routes + lazy SuperAdmin routes
   index.css                     # Tailwind layers + component classes (.btn-*, .field-*, .card, .chip, .container-x)
-  data/seed.js                  # 5 demo animals, default settings, banks, terms. state version = 2
+  data/constants.js             # ANIMAL_TYPES, PRODUCT_KINDS, KIND_LABEL, MAX_IMAGES, DETAILS_MAX
   lib/
     currency.js                 # FX + formatting (rates-aware)
     helpers.js                  # uid, initials, fullName, formatDate/Time, isEmail, isPhone, clamp
     images.js                   # portrait image model + helpers + upload downscale
-  firebase/
-    config.js                   # ⟵ USER PASTES FIREBASE CONFIG HERE; exports firebaseEnabled, db
-    api.js                      # Firestore CRUD + realtime subscriptions + seed/reset
+  supabase/
+    client.js                   # configured client (PKCE, detectSessionInUrl off)
+    api.js                      # all CRUD + realtime + auth + admin users + case mapping
   store/
-    AppContext.jsx              # dual-mode store (Firestore/local); useApp(); auto-release sweep
+    AppContext.jsx              # Supabase-only store; useApp(); derived money math; auto-release sweep
     ToastContext.jsx            # toast system (useToast)
   components/
     Header, Footer, Logo, PageHeader, SectionHeading, Reveal, ScrollToTop,
-    Modal, Lightbox, AnimalCard, CurrencyPills, StatusBadge, EmptyState
-  sections/                     # home sections: Hero, About, Concept, Highlights, Process,
-                                #   Herd (carousel), Transparency (Manzil app mockup), MasterPlan, Contact
+    Modal, Lightbox, ProductCard, Pagination, CurrencyPills, StatusBadge, EmptyState
+  sections/                     # Hero, About, Concept, Highlights, Process, Herd,
+                                #   Equipment, Transparency, MasterPlan, Contact
   pages/
-    Home, AnimalSelection, DonationPage, ThankYou, NotFound,
-    ManageProduct, ConfirmDonation, DonationsMade, SettingsPage,
+    Home, ProductSelection, SponsorPage, ThankYou, NotFound,
+    ManageProduct, ConfirmSponsorships, SponsorshipsMade, SettingsPage, AdminUsers,
+    auth/AdminAuth, auth/AuthCallback, auth/SetPassword,
     superadmin/SuperAdminLayout, superadmin/Dashboard
+supabase/migrations/            # 0001_init.sql, 0002_seed.sql, 0003_realtime.sql
 public/
-  logo.jpg                      # THE official logo (client-provided; use only this)
-  img/hero-mosque.png           # hero
-  img/aerial.png                # About section
-  img/masterplan.png            # Master Plan (click-to-zoom)
-  img/logo-seal.jpg             # hi-res seal
+  logo.jpg, img/hero-mosque.png, img/aerial.png, img/masterplan.png, img/logo-seal.jpg
 ```
-Cow photos are **Unsplash** URLs (verified working) in `seed.js`. Real cow photos exist in the pptx but
-Unsplash was requested for placeholders.
 
 ---
 
 ## 9. Design system
 
-- Palette **"Emerald & Gold"** (chosen by client; derived from the logo):
+- Palette **"Emerald & Gold"** (derived from the logo):
   - primary emerald `#1E8A6E` (brand-500), pine `#0F4A3C` (brand-800), moss `#517336`,
     gold CTA `#FBB315` (gold-400), ink `#1C1B16`, cream `#F6F7F3`, sand `#EBEDE4`, parchment `#FBFBF8`.
   - Full ramps + `moss`, `pine`, shadows (`soft`/`lift`/`gold`), fonts, animations in `tailwind.config.js`.
-- Style direction: **Organic Biophilic** — rounded corners (cards 12–24px), soft natural shadows, generous
-  whitespace (tightened for mobile). Buttons: `.btn-gold` (primary CTA), `.btn-primary` (emerald),
+- Style direction: **Organic Biophilic** — rounded corners (cards 12–24px), soft natural shadows,
+  generous whitespace (tightened for mobile). Buttons: `.btn-gold` (primary CTA), `.btn-primary`,
   `.btn-outline`, `.btn-ghost`, `.btn-pine`, sizes `.btn-lg/md/sm`.
+- **Uniform product card is a design constant.** `ProductCard` is used for live stock AND equipment,
+  on the public site AND in Super Admin. Every zone has a reserved height (thumbnail strip `h-[60px]`,
+  details `line-clamp-2 h-10`, owner row `h-5`, chip row `min-h-[26px]`) and long text truncates, so
+  cards never resize because content is longer. Verified identical: 861px at 375px, 914px at 1280px.
 
 ---
 
@@ -241,35 +261,37 @@ Unsplash was requested for placeholders.
 
 - **Modal focus (fixed):** `Modal`'s focus/keydown `useEffect` must depend ONLY on `[open]`, using an
   `onCloseRef` for the latest `onClose`. If `onClose` is in the deps, the effect re-runs on every parent
-  render (each keystroke) and steals focus to the Close button. It focuses the **first form field**, not the
-  close button.
+  render (each keystroke) and steals focus to the Close button. It focuses the **first form field**.
 - **AnimatePresence + portal + StrictMode (fixed):** `Modal` and `Lightbox` render `null` when closed
   (enter animation only). Do NOT wrap their mount/unmount in `AnimatePresence` again — under React 18
-  StrictMode + `createPortal` the exit animation left an invisible `opacity:0` overlay that blocked clicks.
-- **Reserved lock:** `updateProduct`/`deleteProduct` no-op on `status==='reserved'` (store-level guard),
-  and the Manage Product UI hides the buttons + shows a lock note.
-- **State version = 2** (`seed.js`). Bumping the shape? bump the version so stale localStorage is discarded.
-  Legacy string images are auto-normalized by `normalizeImage`, so mixed data won't crash.
-- **Firebase safe to commit:** web config (apiKey etc.) is public by design; keeping it in `config.js` is fine.
-- **Cart is never global.** Reservations/products/settings/donations are.
-- **Bundle:** admin is code-split (`React.lazy`); `vite.config.js` `manualChunks` split react/firebase/motion.
-  Firebase (~147KB gz) loads on every page because the store needs it in global mode — inherent.
+  StrictMode + `createPortal` the exit animation left an invisible `opacity:0` overlay blocking clicks.
+- **`detectSessionInUrl` must stay off.** HashRouter would consume the fragment. `/auth/callback`
+  reads the credential from both `location.search` and the hash query, and its effect is guarded by a
+  ref because StrictMode double-invokes and a code can only be redeemed once.
+- **PKCE `code` only works in the browser that started the flow.** An invite opened on another device
+  has no `code_verifier`. `AuthCallback` therefore prefers `token_hash` + `verifyOtp()` and falls back
+  to `exchangeCodeForSession()` — so the **invite email template should use `{{ .TokenHash }}`**.
+- **Settings arrive after mount.** Anything that seeds local state from `settings` must reconcile in an
+  effect. `SponsorPage` does this for the bank dropdown default — without it the visible first option
+  and the submitted `bankId` disagreed (a real bug caught in browser QA).
+- **Grid children need `min-w-0`.** The `<select>` of bank names has a wide min-content, which blew the
+  page out to 414px at a 375px viewport until `min-w-0` was added to the `SponsorPage` grid children.
+- **Availability is computed client-side** in `AppContext` (`money()`), mirroring the `product_status`
+  view. Views don't emit `postgres_changes`, so reading the view would not be realtime. Keep the two
+  in sync if the status rules ever change.
+- **Product `value_pkr` is never mutated by a sponsorship.** All money movement is ledger rows.
+- **RLS:** anon can read products/sponsorships/settings and INSERT a `pending` sponsorship. Everything
+  else needs an authenticated session. Deleting an `admin_profiles` row removes panel access but does
+  **not** delete the `auth.users` row (that needs the service-role key / dashboard).
+- **Cart is never global.** Products / sponsorships / settings are.
+- **Bundle:** admin is code-split (`React.lazy`); `vite.config.js` `manualChunks` splits
+  react / supabase / motion.
 
 ---
 
-## 11. Firebase setup (hand to client)
+## 11. Related context
 
-1. https://console.firebase.google.com → create/open a project.
-2. Project settings (⚙️) → General → Your apps → add a **Web app** → copy the `firebaseConfig` values.
-3. Paste them into **`src/firebase/config.js`** (labelled placeholder). `firebaseEnabled` flips true automatically.
-4. Build → **Firestore Database** → Create database → start in **test mode** (allows read/write; no login yet).
-5. Rebuild/redeploy. Super Admin banner switches to "Global mode".
-
----
-
-## 12. Related context
-
-- Memory: `project-iga-sial-farm` (in `C:\Users\PC\.claude\projects\D--\memory\`) has the same key facts.
+- Memory: `project-iga-sial-farm` (in `C:\Users\PC\.claude\projects\D--\memory\`).
 - Source assets & original pptx: `D:\IGA Sial\`.
-- Client preferences on file: $10k agency-grade quality bar; keep project markdown docs in the Obsidian vault
-  by project folder (this State.md lives in-repo intentionally so a new session finds it immediately).
+- Client preferences on file: $10k agency-grade quality bar; keep project markdown docs in the Obsidian
+  vault by project folder (this State.md lives in-repo intentionally so a new session finds it immediately).
