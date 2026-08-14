@@ -49,7 +49,18 @@ npm run preview      # preview the built dist
 - Env (`.env`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
   `vite.config.js` sets `envPrefix: ['VITE_', 'NEXT_PUBLIC_']` so `import.meta.env.NEXT_PUBLIC_*` works.
 - Browser-preview launcher entry: **`iga-dev`** (`.claude/launch.json`).
-- **Deploy:** client self-hosts. `npm run build`, upload `dist/`. HashRouter ⇒ no SPA rewrite rules needed.
+
+**Deploy — see `DEPLOY.md` for the full runbook.**
+
+| | |
+|---|---|
+| Repo | [Haznain666/IGA-Sial](https://github.com/Haznain666/IGA-Sial) (renamed from the misspelled `IAG-Sial`) |
+| Live (interim) | https://haznain666.github.io/IGA-Sial/ — auto-deploys from `main` via `.github/workflows/pages.yml` |
+| Intended host | **Hostinger** — blocked, see §12 |
+| CI | `.github/workflows/ci.yml` runs `npm ci && npm run build` on every push/PR |
+
+HashRouter ⇒ no SPA rewrite rules needed anywhere. GitHub Pages serves from a subpath, so CI sets
+`BASE_PATH=/IGA-Sial/` and `vite.config.js` reads it; a root-domain host (Hostinger) needs no base at all.
 
 ---
 
@@ -59,20 +70,28 @@ Built and browser-verified: Supabase data layer, Donation→Sponsorship ledger m
 product cards, partial payments, pagination, slim confirmation cards, Supabase Auth gate on Super Admin.
 `npm run build` passes with 0 errors.
 
+**Done since that build (verified against the live database):**
+- `0003_realtime.sql` **applied** — `products`, `sponsorships`, `app_settings` are all in the
+  `supabase_realtime` publication.
+- `0004_auto_release.sql` **applied** — auto-release now runs **server-side hourly via pg_cron**
+  (`release-expired-sponsorships`, `0 * * * *`), not in the browser. See Gotchas for why.
+- **Email templates configured**: reset-password emits the 6-digit `{{ .Token }}`; the invite link uses
+  `{{ .TokenHash }}` so an invite opened on a different device still works.
+- The stray QA test sponsorship has been **deleted**; the ledger is empty and all 9 products are
+  `available`.
+
 **Open items:**
-- **No admin account exists yet.** Create the first user in the Supabase dashboard
-  (Authentication → Users → Add user, or send an invite). The `on_auth_user_created` trigger writes the
-  matching `admin_profiles` row automatically. After that, further admins can be invited in-app.
-- **Outbound email is not configured** in Supabase, so invites and password resets don't actually
-  arrive yet. The UI flows are built and wired; configure SMTP + the email templates to finish them.
-- The **password-reset email template must emit a 6-digit code** (`{{ .Token }}`), because the UI asks
-  for a code and calls `verifyOtp({ type: 'recovery' })`.
-- The **invite template should use `{{ .TokenHash }}`** in the link (see Gotchas — PKCE `code` only
-  works in the browser that started the flow).
-- Apply `supabase/migrations/0003_realtime.sql` if Realtime ever stops updating live.
-- A **QA test sponsorship** was created during verification (product `cow_noor`, sponsor
-  "QA Verification / qa-test@example.com", Rs 120,000, pending). Cancel it in
-  Super Admin → Confirmations, or it auto-releases after 7 days.
+- ⛔ **No admin account exists yet** — blocked on SMTP below. The plan is to invite
+  `haznain666@gmail.com` through the real invite flow so the owner sets their own password (which also
+  proves the pipeline). The `on_auth_user_created` trigger writes the `admin_profiles` row automatically.
+- ⛔ **SMTP not yet saved.** Resend account + API key exist and `codexmill.com` DNS is in; the key must
+  be pasted into Supabase → Auth → SMTP (host `smtp.resend.com`, port 465, user `resend`, sender
+  `info@codexmill.com`). Until then invites and resets do not deliver.
+- ⛔ **Hostinger deploy blocked** — the Hostinger MCP connector returns `Unauthenticated`. Needs an API
+  token (hPanel → API) in the MCP config. GitHub Pages is the interim host meanwhile.
+- **Supabase Auth URL config still points at defaults** — set Site URL and redirect URLs to the final
+  domain once hosting is settled, or invite/reset links will point at the wrong origin.
+- Everything admin-authenticated is **untested against live writes**, because no login exists yet.
 
 ---
 
@@ -107,9 +126,14 @@ product cards, partial payments, pagination, slim confirmation cards, Supabase A
 **What's global vs local:** products, sponsorships, settings and admin users are global (Postgres).
 The **cart** is still per-browser (`localStorage` key `iga-cart`) — it's a sponsor's in-progress selection.
 
-**Auto-release sweep:** every 60s (and on mount), any **pending** sponsorship older than
-`settings.reservationDays` is set to `released` (0 = never), freeing its amount. RLS means only an
-authenticated admin's browser actually performs the write; anon sweeps no-op silently.
+**Auto-release — the authority is the DATABASE, not the browser.** `release_expired_sponsorships()`
+runs hourly under pg_cron and sets any **pending** sponsorship older than `reservation_days` to
+`released` (0 = never), freeing its amount.
+
+The client also sweeps every 60s for snappy feedback, but that is a **convenience only**: RLS blocks
+anonymous writes, so a visitor's sweep silently no-ops. Before pg_cron, an unattended site kept items
+reserved forever. If you ever change the release rule, change it in `0004_auto_release.sql` first —
+the client sweep must never be the only thing enforcing it.
 
 ### Database (`supabase/migrations/`)
 
