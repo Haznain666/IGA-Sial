@@ -4,6 +4,7 @@ import { Heart, Trash2, Copy, Landmark, ShieldCheck, HandHeart, PackageOpen, Pig
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import CurrencyPills from '../components/CurrencyPills.jsx'
+import PartialChips from '../components/PartialChips.jsx'
 import { useApp } from '../store/AppContext.jsx'
 import { useToast } from '../store/ToastContext.jsx'
 import { formatMoney } from '../lib/currency.js'
@@ -299,9 +300,13 @@ export default function SponsorPage() {
                           {p.kind === 'equipment' ? 'Equipment' : p.type || 'Live Stock'} ·{' '}
                           {formatMoney(p.valuePKR, 'PKR')}
                         </p>
+                        {/* Item value above stays the product's real value; this is
+                            the balance still open on it. Never the same figure once
+                            someone has contributed. */}
                         <p className="mt-0.5 text-xs font-medium text-brand-600">
-                          {formatMoney(remaining, 'PKR')} still open
+                          {formatMoney(remaining, 'PKR')} available to sponsor
                         </p>
+                        <PartialChips product={p} reserveSpace={false} className="mt-1.5" />
                       </div>
                       <button
                         type="button"

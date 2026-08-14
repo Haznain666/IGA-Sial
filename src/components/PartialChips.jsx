@@ -1,4 +1,4 @@
-import { PiggyBank, CircleDollarSign } from 'lucide-react'
+import { PiggyBank, CircleDollarSign, Clock } from 'lucide-react'
 import { useApp } from '../store/AppContext.jsx'
 import { formatMoney } from '../lib/currency.js'
 
@@ -9,10 +9,15 @@ import { formatMoney } from '../lib/currency.js'
 // only, so the Herd and Equipment carousels silently showed nothing. If you add
 // another place that renders a product, render this too.
 //
-// Rules (see State.md §7):
-//   - "Partial sponsorship available" — the item qualifies but nothing is confirmed yet.
-//   - "Partially sponsored · Rs X left" — appears ONLY once a contribution is
-//     CONFIRMED by an admin, never while it is still pending.
+// Exactly ONE chip shows at a time, in this order:
+//   1. "Partially sponsored · Rs X left" — money CONFIRMED by an admin.
+//   2. "Partially reserved · Rs X left"  — money PLEDGED but not yet confirmed.
+//   3. "Partial sponsorship available"   — qualifies, nothing committed yet.
+//
+// One chip, not several, because the card height is a hard design constant: a
+// second chip would wrap on narrow cards and break it. The amount shown is the
+// REMAINING balance — display only. A product's value_pkr is never changed by a
+// sponsorship; `remaining` is derived from the sponsorships ledger.
 //
 // `reserveSpace` keeps a fixed-height row so cards in a grid stay identical
 // whether or not a chip is present; carousels pass false to avoid a dead gap.
@@ -21,22 +26,34 @@ export default function PartialChips({ product, reserveSpace = true, className =
 
   const stats = statsOf(product.id)
   const eligible = isPartialEligible(product)
-  const partiallySponsored = stats.confirmed > 0 && stats.remaining > 0
+  const openBalance = stats.remaining > 0
 
-  if (!reserveSpace && !eligible && !partiallySponsored) return null
+  const confirmedPart = stats.confirmed > 0 && openBalance
+  const reservedPart = !confirmedPart && stats.pending > 0 && openBalance
+  const availableOnly = stats.committed === 0 && eligible
+
+  if (!reserveSpace && !confirmedPart && !reservedPart && !availableOnly) return null
+
+  const left = formatMoney(stats.remaining, 'PKR')
 
   return (
     <div
       className={`flex flex-wrap items-start gap-1.5 ${reserveSpace ? 'min-h-[26px]' : ''} ${className}`}
     >
-      {partiallySponsored && (
-        <span className="chip bg-brand-50 text-[11px] font-semibold text-brand-700">
+      {confirmedPart && (
+        <span className="chip whitespace-nowrap bg-brand-50 text-[11px] font-semibold text-brand-700">
           <CircleDollarSign className="h-3.5 w-3.5" aria-hidden="true" />
-          Partially sponsored · {formatMoney(stats.remaining, 'PKR')} left
+          Partially sponsored · {left} left
         </span>
       )}
-      {eligible && !partiallySponsored && (
-        <span className="chip bg-gold-100 text-[11px] font-semibold text-gold-800">
+      {reservedPart && (
+        <span className="chip whitespace-nowrap bg-gold-50 text-[11px] font-semibold text-gold-800">
+          <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+          Partially reserved · {left} left
+        </span>
+      )}
+      {availableOnly && (
+        <span className="chip whitespace-nowrap bg-gold-100 text-[11px] font-semibold text-gold-800">
           <PiggyBank className="h-3.5 w-3.5" aria-hidden="true" />
           Partial sponsorship available
         </span>
