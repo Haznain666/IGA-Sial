@@ -1,7 +1,9 @@
+// Derived product status, straight from the sponsorship ledger.
 const STYLES = {
   available: { label: 'Available', cls: 'bg-brand-50 text-brand-700' },
+  partial: { label: 'Partly sponsored', cls: 'bg-brand-100 text-brand-800' },
   reserved: { label: 'Reserved', cls: 'bg-gold-100 text-gold-800' },
-  donated: { label: 'Donated', cls: 'bg-moss/15 text-moss-dark' },
+  sponsored: { label: 'Sponsored', cls: 'bg-moss/15 text-moss-dark' },
 }
 
 export default function StatusBadge({ status }) {
