@@ -80,6 +80,15 @@ product cards, partial payments, pagination, slim confirmation cards, Supabase A
 - The stray QA test sponsorship has been **deleted**; the ledger is empty and all 9 products are
   `available`.
 
+**Verified on the live deploy (2026-08-14):**
+- Card design constant **holds**: every card identical, livestock and equipment alike, including long
+  titles — 846×323 at 375px, 914×375 at 1280px. Zero horizontal overflow at either width.
+- Pagination present on product selection (`nav[aria-label="Pagination"]`, 9 products → 2 pages).
+- Auth gate holds on deep links (`/#/super-admin/settings` → sign-in).
+- All product images resolve; no console errors.
+- Two bugs found and fixed here: public/ images were not base-path aware (404'd on Pages — see
+  `assetUrl()` in `lib/images.js`), and one Unsplash photo had been removed upstream.
+
 **Open items:**
 - ⛔ **No admin account exists yet** — blocked on SMTP below. The plan is to invite
   `haznain666@gmail.com` through the real invite flow so the owner sets their own password (which also
