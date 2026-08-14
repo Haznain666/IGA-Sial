@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   ToggleRight, ScrollText, Landmark, Plus, Pencil, Trash2, CheckCircle2, Building2, ListChecks,
-  UserCog, Coins, CalendarClock, PiggyBank, Beef, Wrench,
+  UserCog, Coins, CalendarClock, HandCoins, Beef, Wrench,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import Modal from '../components/Modal.jsx'
@@ -100,13 +100,13 @@ export default function SettingsPage() {
         </SettingCard>
 
         <SettingCard
-          icon={PiggyBank}
+          icon={HandCoins}
           title="Partial payment"
           description="Let several sponsors share the cost of one item. An item qualifies when the master switch is on, its category is on, and its value is at or above that category’s minimum."
         >
           <div className="divide-y divide-black/5">
             <Toggle
-              id="partialEnabled" icon={PiggyBank} checked={settings.partialEnabled} onChange={toggle('partialEnabled')}
+              id="partialEnabled" icon={HandCoins} checked={settings.partialEnabled} onChange={toggle('partialEnabled')}
               label="Enable partial payments"
               description="The master switch. With this off, every sponsorship must cover the item’s full remaining value."
             />

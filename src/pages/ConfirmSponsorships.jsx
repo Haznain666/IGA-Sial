@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  BadgeCheck, XCircle, User2, Mail, Phone, Clock, ClipboardCheck, Timer, PiggyBank, Wrench, Beef,
+  BadgeCheck, XCircle, User2, Mail, Phone, Clock, ClipboardCheck, Timer, HandCoins, Wrench, Beef,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
@@ -268,7 +268,7 @@ function ConfirmationCard({ sponsorship: s, product, remaining, holdLabel, onCon
         </div>
         {s.isPartial && (
           <span className="chip shrink-0 bg-gold-100 text-[11px] font-semibold text-gold-800">
-            <PiggyBank className="h-3.5 w-3.5" aria-hidden="true" />
+            <HandCoins className="h-3.5 w-3.5" aria-hidden="true" />
             Partial
           </span>
         )}

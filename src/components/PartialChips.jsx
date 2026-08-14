@@ -1,4 +1,4 @@
-import { PiggyBank, CircleDollarSign, Clock } from 'lucide-react'
+import { HandCoins, CircleDollarSign, Clock } from 'lucide-react'
 import { useApp } from '../store/AppContext.jsx'
 import { formatMoney } from '../lib/currency.js'
 
@@ -54,7 +54,7 @@ export default function PartialChips({ product, reserveSpace = true, className =
       )}
       {availableOnly && (
         <span className="chip whitespace-nowrap bg-gold-100 text-[11px] font-semibold text-gold-800">
-          <PiggyBank className="h-3.5 w-3.5" aria-hidden="true" />
+          <HandCoins className="h-3.5 w-3.5" aria-hidden="true" />
           Partial sponsorship available
         </span>
       )}

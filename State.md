@@ -129,6 +129,12 @@ separators while typing, 2dp settled on blur. They are `type="text"` + `inputMod
 `<input type="number">` cannot display separators. Decimals are NOT applied mid-keystroke — doing so
 fights the caret and makes the field unusable.
 
+**⛔ ICONOGRAPHY RULE — non-negotiable.** This is a Muslim charity in Pakistan. **Never use pig, pork,
+or piggy-bank imagery anywhere on this site.** A `PiggyBank` icon shipped on the partial-sponsorship
+chips and was rightly rejected by the client; it is replaced everywhere with **`HandCoins`**.
+Before adding any icon, check it against this rule — also avoid alcohol and other-faith religious
+symbols. `grep -rn "PiggyBank\|Piggy" src/` must return nothing.
+
 **Chip states (current spec — supersedes the earlier §5b "nothing until confirmed" rule).**
 `src/components/PartialChips.jsx` renders exactly ONE chip, in priority order:
 

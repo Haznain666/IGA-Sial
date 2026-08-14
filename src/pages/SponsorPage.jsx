@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, Trash2, Copy, Landmark, ShieldCheck, HandHeart, PackageOpen, PiggyBank } from 'lucide-react'
+import { Heart, Trash2, Copy, Landmark, ShieldCheck, HandHeart, PackageOpen, HandCoins } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import CurrencyPills from '../components/CurrencyPills.jsx'
@@ -322,7 +322,7 @@ export default function SponsorPage() {
                       <div className="mt-3 border-t border-black/5 pt-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex gap-2">
-                            <PiggyBank className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" aria-hidden="true" />
+                            <HandCoins className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" aria-hidden="true" />
                             <span id={`partial-${p.id}-label`} className="text-sm font-medium text-ink">
                               Partial sponsor
                             </span>
