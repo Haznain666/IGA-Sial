@@ -1,23 +1,26 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   Plus, Pencil, Trash2, Upload, X, Link2, PackageSearch, Building2, User2, ImagePlus,
-  AlertTriangle, ZoomIn, MoveHorizontal, MoveVertical, RotateCcw, Lock,
+  AlertTriangle, ZoomIn, MoveHorizontal, MoveVertical, RotateCcw, Lock, Wrench, Beef,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import Modal from '../components/Modal.jsx'
+import ProductCard from '../components/ProductCard.jsx'
 import StatusBadge from '../components/StatusBadge.jsx'
 import { useApp } from '../store/AppContext.jsx'
 import { useToast } from '../store/ToastContext.jsx'
-import { ANIMAL_TYPES } from '../data/seed.js'
+import { ANIMAL_TYPES, MAX_IMAGES, DETAILS_MAX } from '../data/constants.js'
 import { convertFromPKR, formatMoney } from '../lib/currency.js'
 import { fileToScaledDataURL, normalizeImage, imageUrl, imageStyle } from '../lib/images.js'
-import { fullName } from '../lib/helpers.js'
 
-const MAX_IMAGES = 5
-const DETAILS_MAX = 300
+const TABS = [
+  { kind: 'livestock', label: 'Animal Profile', addLabel: 'Add Animal', icon: Beef },
+  { kind: 'equipment', label: 'Equipment', addLabel: 'Add Equipment', icon: Wrench },
+]
 
-const blankForm = () => ({
+const blankAnimal = () => ({
+  kind: 'livestock',
   images: [],
   name: '',
   details: '',
@@ -29,18 +32,35 @@ const blankForm = () => ({
   owner: { ownedByFarm: true, firstName: '', lastName: '', cnic: '', phone: '', email: '' },
 })
 
+const blankEquipment = () => ({
+  kind: 'equipment',
+  images: [],
+  name: '',
+  details: '',
+  warranty: '',
+  lifeSpan: '',
+  valuePKR: '',
+})
+
 export default function ManageProduct() {
-  const { products, settings, addProduct, updateProduct, deleteProduct } = useApp()
+  const { livestock, equipment, settings, addProduct, updateProduct, deleteProduct, statusOf, hasOpenSponsorships } = useApp()
   const { toast } = useToast()
+  const [tab, setTab] = useState('livestock')
   const [editor, setEditor] = useState({ open: false, id: null })
   const [confirmDelete, setConfirmDelete] = useState(null)
 
-  const editing = editor.id ? products.find((p) => p.id === editor.id) : null
+  const list = tab === 'equipment' ? equipment : livestock
+  const active = useMemo(() => TABS.find((t) => t.kind === tab), [tab])
+  const editing = editor.id ? list.find((p) => p.id === editor.id) : null
 
-  const doDelete = () => {
+  const doDelete = async () => {
     if (!confirmDelete) return
-    deleteProduct(confirmDelete.id)
-    toast(`${confirmDelete.name} was deleted.`, { type: 'info' })
+    try {
+      await deleteProduct(confirmDelete.id)
+      toast(`${confirmDelete.name} was deleted.`, { type: 'info' })
+    } catch (e) {
+      toast(e.message, { type: 'error', duration: 6000 })
+    }
     setConfirmDelete(null)
   }
 
@@ -49,112 +69,120 @@ export default function ManageProduct() {
       <PageHeader
         hideBack
         eyebrow="Manage products"
-        title="Animal profiles"
-        subtitle="Create, edit, and remove the animals shown across the site. Photos use a fixed portrait frame you can fine-tune per image."
+        title="Live stock &amp; equipment"
+        subtitle="Create, edit, and remove everything shown across the site. Photos use a fixed portrait frame you can fine-tune per image."
         actions={
           <button onClick={() => setEditor({ open: true, id: null })} className="btn-primary btn-md">
             <Plus className="h-4 w-4" aria-hidden="true" />
-            Add animal
+            {active.addLabel}
           </button>
         }
       />
 
       <div className="container-x py-8 sm:py-12">
-        {products.length === 0 ? (
+        <div className="mb-6 flex flex-wrap gap-2" role="tablist" aria-label="Product type">
+          {TABS.map((t) => (
+            <button
+              key={t.kind}
+              role="tab"
+              aria-selected={tab === t.kind}
+              onClick={() => setTab(t.kind)}
+              className={`chip cursor-pointer px-4 py-2.5 text-sm transition-colors ${
+                tab === t.kind
+                  ? 'bg-brand-500 text-white'
+                  : 'border border-brand-200 bg-white text-ink/70 hover:bg-brand-50'
+              }`}
+            >
+              <t.icon className="h-4 w-4" aria-hidden="true" />
+              {t.label}
+              <span className={tab === t.kind ? 'text-white/70' : 'text-ink/40'}>
+                {t.kind === 'equipment' ? equipment.length : livestock.length}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {list.length === 0 ? (
           <EmptyState
             icon={PackageSearch}
-            title="No animals yet"
-            description="Add your first animal profile to populate the herd and donation pages."
+            title={tab === 'equipment' ? 'No equipment yet' : 'No animals yet'}
+            description={
+              tab === 'equipment'
+                ? 'Add your first piece of equipment so sponsors can support the tools behind the herd.'
+                : 'Add your first animal profile to populate the herd and sponsorship pages.'
+            }
             action={
               <button onClick={() => setEditor({ open: true, id: null })} className="btn-primary btn-md">
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                Add animal
+                {active.addLabel}
               </button>
             }
           />
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4">
-            {products.map((p) => (
-              <article key={p.id} className="card flex flex-col overflow-hidden">
-                <div className="relative aspect-[4/5] bg-sand">
-                  <img
-                    src={imageUrl(p.images?.[0])}
-                    alt={p.name}
-                    style={imageStyle(p.images?.[0])}
-                    className="h-full w-full object-cover"
-                  />
-                  <div className="absolute left-2 top-2">
-                    <StatusBadge status={p.status} />
-                  </div>
-                  {p.images?.length > 1 && (
-                    <span className="absolute bottom-2 right-2 chip bg-ink/70 text-[11px] text-cream">
-                      {p.images.length}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-1 flex-col p-3 sm:p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="truncate font-heading text-base font-semibold text-pine sm:text-lg">{p.name}</h3>
-                    <span className="chip shrink-0 bg-brand-50 text-[11px] text-brand-700">{p.type}</span>
-                  </div>
-                  <p className="mt-1 truncate text-xs text-ink/55">
-                    {[p.breed, p.age, p.weight].filter(Boolean).join(' · ')}
-                  </p>
-                  <p className="mt-1.5 font-heading text-sm font-semibold text-brand-600">
-                    {formatMoney(p.valuePKR, 'PKR')}
-                  </p>
-                  <p className="mt-1 flex items-center gap-1.5 truncate text-[11px] text-ink/50">
-                    {p.owner?.ownedByFarm ? (
-                      <Building2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    ) : (
-                      <User2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    )}
-                    <span className="truncate">{p.owner?.ownedByFarm ? 'IGA Sial Farm' : fullName(p.owner) || 'Private owner'}</span>
-                  </p>
-
-                  {p.status === 'reserved' ? (
-                    <div className="mt-3 flex items-start gap-1.5 rounded-xl bg-gold-50 px-3 py-2 text-[11px] leading-snug text-gold-800">
-                      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                      Reserved — release it in Confirmations before editing or deleting.
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {list.map((p) => {
+              const locked = hasOpenSponsorships(p.id)
+              return (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  showOwner={p.kind !== 'equipment'}
+                  footer={
+                    <div className="space-y-3">
+                      <StatusBadge status={statusOf(p.id)} />
+                      {/* Both branches reserve the same height so cards stay uniform. */}
+                      <div className="flex min-h-[42px] items-center">
+                        {locked ? (
+                          <p className="flex items-start gap-1.5 rounded-xl bg-gold-50 px-3 py-2 text-[11px] leading-snug text-gold-800">
+                            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            Open sponsorships — settle them in Confirmations to edit or delete this.
+                          </p>
+                        ) : (
+                          <div className="grid w-full grid-cols-2 gap-2">
+                            <button onClick={() => setEditor({ open: true, id: p.id })} className="btn-outline btn-sm !px-2">
+                              <Pencil className="h-4 w-4" aria-hidden="true" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(p)}
+                              className="btn-sm btn border border-red-200 bg-white !px-2 text-red-600 hover:bg-red-50 focus-visible:ring-red-400"
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button onClick={() => setEditor({ open: true, id: p.id })} className="btn-outline btn-sm !px-2">
-                        <Pencil className="h-4 w-4" aria-hidden="true" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => setConfirmDelete(p)}
-                        className="btn-sm btn border border-red-200 bg-white !px-2 text-red-600 hover:bg-red-50 focus-visible:ring-red-400"
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        <span className="hidden sm:inline">Delete</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </article>
-            ))}
+                  }
+                />
+              )
+            })}
           </div>
         )}
       </div>
 
       {editor.open && (
         <ProductEditor
-          key={editor.id || 'new'}
+          key={editor.id || `new-${tab}`}
+          kind={tab}
           product={editing}
           collectOwnerInfo={settings.collectOwnerInfo}
           fxRates={settings.fxRates}
           onClose={() => setEditor({ open: false, id: null })}
-          onSave={(data) => {
-            if (editor.id) {
-              updateProduct(editor.id, data)
-              toast(`${data.name} was updated.`)
-            } else {
-              addProduct(data)
-              toast(`${data.name} was added to the herd.`)
+          onSave={async (data) => {
+            try {
+              if (editor.id) {
+                await updateProduct(editor.id, data)
+                toast(`${data.name} was updated.`)
+              } else {
+                await addProduct(data)
+                toast(`${data.name} was added.`)
+              }
+              setEditor({ open: false, id: null })
+            } catch (e) {
+              toast(e.message, { type: 'error', duration: 6000 })
             }
-            setEditor({ open: false, id: null })
           }}
         />
       )}
@@ -162,7 +190,7 @@ export default function ManageProduct() {
       <Modal
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
-        title="Delete animal"
+        title={confirmDelete?.kind === 'equipment' ? 'Delete equipment' : 'Delete animal'}
         size="sm"
         footer={
           <div className="flex justify-end gap-2">
@@ -186,7 +214,7 @@ export default function ManageProduct() {
           <p className="text-ink/75">
             Are you sure you want to delete{' '}
             <span className="font-semibold text-ink">{confirmDelete?.name}</span>? This removes the
-            animal profile. This can’t be undone.
+            profile entirely. This can’t be undone.
           </p>
         </div>
       </Modal>
@@ -194,18 +222,25 @@ export default function ManageProduct() {
   )
 }
 
-function ProductEditor({ product, collectOwnerInfo, fxRates, onClose, onSave }) {
-  const [form, setForm] = useState(() =>
-    product
-      ? {
-          images: (product.images || []).map(normalizeImage),
-          name: product.name || '',
-          details: product.details || '',
+function ProductEditor({ kind, product, collectOwnerInfo, fxRates, onClose, onSave }) {
+  const isEquipment = (product?.kind || kind) === 'equipment'
+  const [form, setForm] = useState(() => {
+    if (!product) return isEquipment ? blankEquipment() : blankAnimal()
+    const base = {
+      kind: product.kind,
+      images: (product.images || []).map(normalizeImage),
+      name: product.name || '',
+      details: product.details || '',
+      valuePKR: product.valuePKR != null ? String(product.valuePKR) : '',
+    }
+    return isEquipment
+      ? { ...base, warranty: product.warranty || '', lifeSpan: product.lifeSpan || '' }
+      : {
+          ...base,
           breed: product.breed || '',
           age: product.age || '',
           weight: product.weight || '',
           type: product.type || 'Cow',
-          valuePKR: product.valuePKR != null ? String(product.valuePKR) : '',
           owner: {
             ownedByFarm: product.owner?.ownedByFarm ?? true,
             firstName: product.owner?.firstName || '',
@@ -215,8 +250,7 @@ function ProductEditor({ product, collectOwnerInfo, fxRates, onClose, onSave }) 
             email: product.owner?.email || '',
           },
         }
-      : blankForm(),
-  )
+  })
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
 
@@ -237,35 +271,51 @@ function ProductEditor({ product, collectOwnerInfo, fxRates, onClose, onSave }) 
     const e = {}
     if (!form.name.trim()) e.name = 'Name is required.'
     if (form.images.length === 0) e.images = 'Add at least one photo.'
-    if (!form.valuePKR || Number(form.valuePKR) <= 0) e.valuePKR = 'Enter a donation value in PKR.'
-    const needsOwner = collectOwnerInfo && !form.owner.ownedByFarm
+    if (!form.valuePKR || Number(form.valuePKR) <= 0) e.valuePKR = 'Enter a sponsorship value in PKR.'
+    const needsOwner = !isEquipment && collectOwnerInfo && !form.owner.ownedByFarm
     if (needsOwner && !form.owner.firstName.trim()) e.ownerFirst = 'Owner first name is required.'
     if (needsOwner && !form.owner.lastName.trim()) e.ownerLast = 'Owner last name is required.'
     setErrors(e)
     if (Object.keys(e).length) return
+
+    const common = {
+      kind: isEquipment ? 'equipment' : 'livestock',
+      images: form.images.map(normalizeImage),
+      name: form.name.trim(),
+      details: form.details.trim().slice(0, DETAILS_MAX),
+      valuePKR: Math.round(Number(form.valuePKR)),
+    }
+
+    if (isEquipment) {
+      onSave({ ...common, warranty: form.warranty.trim(), lifeSpan: form.lifeSpan.trim() })
+      return
+    }
 
     const owner = collectOwnerInfo && !form.owner.ownedByFarm
       ? { ...form.owner, ownedByFarm: false }
       : { ownedByFarm: true, firstName: '', lastName: '', cnic: '', phone: '', email: '' }
 
     onSave({
-      images: form.images.map(normalizeImage),
-      name: form.name.trim(),
-      details: form.details.trim().slice(0, DETAILS_MAX),
+      ...common,
       breed: form.breed.trim(),
       age: form.age.trim(),
       weight: form.weight.trim(),
       type: form.type,
-      valuePKR: Math.round(Number(form.valuePKR)),
       owner,
     })
   }
+
+  const title = product
+    ? `Edit ${product.name}`
+    : isEquipment
+      ? 'Add new equipment'
+      : 'Add a new animal'
 
   return (
     <Modal
       open
       onClose={onClose}
-      title={product ? `Edit ${product.name}` : 'Add a new animal'}
+      title={title}
       description="Photos are shown in a fixed portrait frame — adjust each to fit."
       size="xl"
       footer={
@@ -274,7 +324,7 @@ function ProductEditor({ product, collectOwnerInfo, fxRates, onClose, onSave }) 
             Cancel
           </button>
           <button type="submit" form="product-form" className="btn-primary btn-md" disabled={busy}>
-            {product ? 'Save changes' : 'Add animal'}
+            {product ? 'Save changes' : isEquipment ? 'Add equipment' : 'Add animal'}
           </button>
         </div>
       }
@@ -283,16 +333,27 @@ function ProductEditor({ product, collectOwnerInfo, fxRates, onClose, onSave }) 
         <ImageManager images={form.images} onChange={setImages} error={errors.images} busy={busy} setBusy={setBusy} />
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <FormField label="Cow name" required error={errors.name}>
-            <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Noor" className={`field-input ${errors.name ? 'field-input-invalid' : ''}`} />
+          <FormField label={isEquipment ? 'Equipment name' : 'Animal name'} required error={errors.name}>
+            <input
+              value={form.name}
+              onChange={(e) => set('name', e.target.value)}
+              placeholder={isEquipment ? 'Twin-Bucket Milking Machine' : 'Noor'}
+              className={`field-input ${errors.name ? 'field-input-invalid' : ''}`}
+            />
           </FormField>
-          <FormField label="Type">
-            <select value={form.type} onChange={(e) => set('type', e.target.value)} className="field-input">
-              {ANIMAL_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </FormField>
+          {isEquipment ? (
+            <FormField label="Warranty">
+              <input value={form.warranty} onChange={(e) => set('warranty', e.target.value)} placeholder="2 years" className="field-input" />
+            </FormField>
+          ) : (
+            <FormField label="Type">
+              <select value={form.type} onChange={(e) => set('type', e.target.value)} className="field-input">
+                {ANIMAL_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </FormField>
+          )}
         </div>
 
         <FormField label="Details" hint={`${form.details.length}/${DETAILS_MAX}`}>
@@ -301,24 +362,34 @@ function ProductEditor({ product, collectOwnerInfo, fxRates, onClose, onSave }) 
             onChange={(e) => set('details', e.target.value.slice(0, DETAILS_MAX))}
             maxLength={DETAILS_MAX}
             rows={3}
-            placeholder="A young calf full of energy, just beginning her life on the farm…"
+            placeholder={
+              isEquipment
+                ? 'A portable twin-bucket milking unit that lets one caretaker milk two animals at a time…'
+                : 'A young calf full of energy, just beginning her life on the farm…'
+            }
             className="field-input resize-none"
           />
         </FormField>
 
-        <div className="grid gap-5 sm:grid-cols-3">
-          <FormField label="Breed">
-            <input value={form.breed} onChange={(e) => set('breed', e.target.value)} placeholder="Sahiwal" className="field-input" />
+        {isEquipment ? (
+          <FormField label="Life span">
+            <input value={form.lifeSpan} onChange={(e) => set('lifeSpan', e.target.value)} placeholder="10 years" className="field-input" />
           </FormField>
-          <FormField label="Age">
-            <input value={form.age} onChange={(e) => set('age', e.target.value)} placeholder="8 months" className="field-input" />
-          </FormField>
-          <FormField label="Weight">
-            <input value={form.weight} onChange={(e) => set('weight', e.target.value)} placeholder="180 kg" className="field-input" />
-          </FormField>
-        </div>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-3">
+            <FormField label="Breed">
+              <input value={form.breed} onChange={(e) => set('breed', e.target.value)} placeholder="Sahiwal" className="field-input" />
+            </FormField>
+            <FormField label="Age">
+              <input value={form.age} onChange={(e) => set('age', e.target.value)} placeholder="8 months" className="field-input" />
+            </FormField>
+            <FormField label="Weight">
+              <input value={form.weight} onChange={(e) => set('weight', e.target.value)} placeholder="180 kg" className="field-input" />
+            </FormField>
+          </div>
+        )}
 
-        <FormField label="Donation value (PKR)" required error={errors.valuePKR}>
+        <FormField label="Sponsorship value (PKR)" required error={errors.valuePKR}>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/45">Rs</span>
             <input
@@ -337,7 +408,12 @@ function ProductEditor({ product, collectOwnerInfo, fxRates, onClose, onSave }) 
           </div>
         </FormField>
 
-        {collectOwnerInfo ? (
+        {isEquipment ? (
+          <div className="flex items-center gap-2 rounded-2xl bg-parchment px-4 py-3 text-sm text-ink/60">
+            <Wrench className="h-4 w-4 text-brand-500" aria-hidden="true" />
+            Equipment is always owned and maintained by IGA Sial Farm.
+          </div>
+        ) : collectOwnerInfo ? (
           <div className="rounded-2xl border border-black/5 bg-parchment p-4 sm:p-5">
             <h3 className="font-heading font-semibold text-pine">Animal owner</h3>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -391,6 +467,7 @@ function ProductEditor({ product, collectOwnerInfo, fxRates, onClose, onSave }) 
 }
 
 // ---- Image manager: portrait upload + per-image zoom/position adjustment ----
+// Shared by animals AND equipment — same component, same adjustments.
 function ImageManager({ images, onChange, error, busy, setBusy }) {
   const { toast } = useToast()
   const fileRef = useRef(null)

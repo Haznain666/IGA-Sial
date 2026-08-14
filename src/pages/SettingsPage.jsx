@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
-  ToggleRight, ScrollText, Landmark, Plus, Pencil, Trash2, DatabaseBackup, AlertTriangle,
-  CheckCircle2, Building2, ListChecks, UserCog, Coins, CalendarClock,
+  ToggleRight, ScrollText, Landmark, Plus, Pencil, Trash2, CheckCircle2, Building2, ListChecks,
+  UserCog, Coins, CalendarClock, PiggyBank, Beef, Wrench,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import Modal from '../components/Modal.jsx'
@@ -10,7 +10,7 @@ import { useToast } from '../store/ToastContext.jsx'
 import { DEFAULT_FX, formatMoney, convertFromPKR } from '../lib/currency.js'
 
 export default function SettingsPage() {
-  const { settings, setSettings, addBank, updateBank, deleteBank, resetDemo, MAX_BANKS, dataMode } = useApp()
+  const { settings, setSettings, addBank, updateBank, deleteBank, MAX_BANKS } = useApp()
   const { toast } = useToast()
 
   const [terms, setTerms] = useState(settings.terms)
@@ -20,38 +20,51 @@ export default function SettingsPage() {
     SAR: String(settings.fxRates?.SAR ?? DEFAULT_FX.SAR),
   }))
   const [holdDays, setHoldDays] = useState(String(settings.reservationDays ?? 7))
+  const [minLivestock, setMinLivestock] = useState(String(settings.partialLivestockMin ?? 0))
+  const [minEquipment, setMinEquipment] = useState(String(settings.partialEquipmentMin ?? 0))
   const [bankEditor, setBankEditor] = useState({ open: false, bank: null })
-  const [confirmReset, setConfirmReset] = useState(false)
 
-  const toggle = (key) => (value) => {
-    setSettings({ [key]: value })
-    toast('Setting saved.', { type: 'info', duration: 1600 })
+  // Every write goes straight to Supabase and streams back to all visitors.
+  const save = async (patch, message) => {
+    try {
+      await setSettings(patch)
+      if (message) toast(message)
+    } catch (e) {
+      toast(e.message, { type: 'error', duration: 6000 })
+    }
   }
 
-  const saveTerms = () => {
-    setSettings({ terms })
-    toast('Terms & Conditions saved.')
-  }
+  const toggle = (key) => (value) => save({ [key]: value }, 'Setting saved.')
 
   const saveFx = () => {
-    const rates = {
-      USD: Number(fx.USD),
-      AUD: Number(fx.AUD),
-      SAR: Number(fx.SAR),
-    }
+    const rates = { USD: Number(fx.USD), AUD: Number(fx.AUD), SAR: Number(fx.SAR) }
     if (![rates.USD, rates.AUD, rates.SAR].every((n) => n > 0)) {
       toast('Enter valid rates greater than zero.', { type: 'error' })
       return
     }
-    setSettings({ fxRates: rates })
-    toast('Exchange rates saved.')
+    save({ fxRates: rates }, 'Exchange rates saved.')
   }
 
   const saveHold = () => {
     const n = Math.max(0, Math.round(Number(holdDays) || 0))
-    setSettings({ reservationDays: n })
     setHoldDays(String(n))
-    toast(n > 0 ? `Reserved animals auto-release after ${n} day${n === 1 ? '' : 's'}.` : 'Auto-release turned off.')
+    save(
+      { reservationDays: n },
+      n > 0
+        ? `Pending sponsorships auto-release after ${n} day${n === 1 ? '' : 's'}.`
+        : 'Auto-release turned off.',
+    )
+  }
+
+  const saveThreshold = (kind) => {
+    const raw = kind === 'equipment' ? minEquipment : minLivestock
+    const n = Math.max(0, Math.round(Number(raw) || 0))
+    if (kind === 'equipment') setMinEquipment(String(n))
+    else setMinLivestock(String(n))
+    save(
+      kind === 'equipment' ? { partialEquipmentMin: n } : { partialLivestockMin: n },
+      `Minimum saved — ${kind === 'equipment' ? 'equipment' : 'live stock'} worth ${formatMoney(n, 'PKR')} or more can be partially sponsored.`,
+    )
   }
 
   const fxSample = convertFromPKR(100000, {
@@ -66,18 +79,18 @@ export default function SettingsPage() {
         hideBack
         eyebrow="Settings"
         title="Site settings"
-        subtitle="Control how donations behave, edit your Terms & Conditions, exchange rates, and bank accounts."
+        subtitle="Control how sponsorships behave, edit your Terms & Conditions, exchange rates, and bank accounts."
       />
 
       <div className="container-x max-w-4xl py-8 sm:py-12">
-        <SettingCard icon={ToggleRight} title="Donation experience" description="Turn features on or off across the donor journey.">
+        <SettingCard icon={ToggleRight} title="Sponsorship experience" description="Turn features on or off across the sponsor journey.">
           <div className="divide-y divide-black/5">
             <Toggle id="multiSelect" icon={ListChecks} checked={settings.multiSelect} onChange={toggle('multiSelect')}
-              label="Allow multi-select on Animal Selection"
-              description="When on, donors can add several animals to one donation via a cart. When off, each card donates a single animal." />
+              label="Allow multi-select on the selection page"
+              description="When on, sponsors can add several animals or pieces of equipment to one sponsorship via a cart. When off, each card sponsors a single item." />
             <Toggle id="gatherRecipientInfo" icon={UserCog} checked={settings.gatherRecipientInfo} onChange={toggle('gatherRecipientInfo')}
               label="Gather recipient info on confirm"
-              description="When on, confirming a donation opens a popup to capture the recipient family’s details. When off, donations confirm directly." />
+              description="When on, confirming a sponsorship opens a popup to capture the recipient family’s details. When off, sponsorships confirm directly." />
             <Toggle id="collectOwnerInfo" icon={Building2} checked={settings.collectOwnerInfo} onChange={toggle('collectOwnerInfo')}
               label="Collect owner info on Manage Products"
               description="When on, you can record a villager owner per animal. When off, every animal defaults to IGA Sial Farm ownership." />
@@ -85,9 +98,54 @@ export default function SettingsPage() {
         </SettingCard>
 
         <SettingCard
+          icon={PiggyBank}
+          title="Partial payment"
+          description="Let several sponsors share the cost of one item. An item qualifies when the master switch is on, its category is on, and its value is at or above that category’s minimum."
+        >
+          <div className="divide-y divide-black/5">
+            <Toggle
+              id="partialEnabled" icon={PiggyBank} checked={settings.partialEnabled} onChange={toggle('partialEnabled')}
+              label="Enable partial payments"
+              description="The master switch. With this off, every sponsorship must cover the item’s full remaining value."
+            />
+          </div>
+
+          <div className={`mt-5 grid gap-4 sm:grid-cols-2 ${settings.partialEnabled ? '' : 'opacity-50'}`}>
+            <CategoryPartial
+              icon={Beef}
+              title="Live Stock"
+              enabled={settings.partialLivestockEnabled}
+              onToggle={toggle('partialLivestockEnabled')}
+              value={minLivestock}
+              onChange={setMinLivestock}
+              onSave={() => saveThreshold('livestock')}
+              disabled={!settings.partialEnabled}
+              inputId="partial-min-livestock"
+            />
+            <CategoryPartial
+              icon={Wrench}
+              title="Equipment"
+              enabled={settings.partialEquipmentEnabled}
+              onToggle={toggle('partialEquipmentEnabled')}
+              value={minEquipment}
+              onChange={setMinEquipment}
+              onSave={() => saveThreshold('equipment')}
+              disabled={!settings.partialEnabled}
+              inputId="partial-min-equipment"
+            />
+          </div>
+
+          <p className="mt-4 rounded-xl bg-parchment px-4 py-3 text-sm text-ink/60">
+            Eligible items show a “Partial sponsorship available” tag everywhere. Each contribution
+            still goes through the same confirmation and auto-release rules, and the item is only
+            gifted once its full value is confirmed.
+          </p>
+        </SettingCard>
+
+        <SettingCard
           icon={CalendarClock}
           title="Reservation hold time"
-          description="How long a reserved animal is held before it automatically returns to Available if the donation isn't confirmed."
+          description="How long a pending sponsorship is held before its amount is automatically released back to the item."
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="sm:max-w-xs sm:flex-1">
@@ -104,12 +162,12 @@ export default function SettingsPage() {
           </div>
           <p className="mt-3 rounded-xl bg-parchment px-4 py-3 text-sm text-ink/60">
             {Number(holdDays) > 0
-              ? `A reserved animal returns to Available automatically ${holdDays} day${Number(holdDays) === 1 ? '' : 's'} after it was reserved, unless the donation is confirmed first.`
-              : 'Set to 0 to hold reserved animals indefinitely (no auto-release).'}
+              ? `A pending contribution is released automatically ${holdDays} day${Number(holdDays) === 1 ? '' : 's'} after it was reserved, unless it is confirmed first. The freed amount becomes available again immediately.`
+              : 'Set to 0 to hold pending sponsorships indefinitely (no auto-release).'}
           </p>
         </SettingCard>
 
-        <SettingCard icon={Coins} title="Exchange rates" description="PKR per 1 unit — used to convert every donation value into USD, AUD, and SAR.">
+        <SettingCard icon={Coins} title="Exchange rates" description="PKR per 1 unit — used to convert every sponsorship value into USD, AUD, and SAR.">
           <div className="grid gap-4 sm:grid-cols-3">
             {['USD', 'AUD', 'SAR'].map((cur) => (
               <div key={cur}>
@@ -138,13 +196,17 @@ export default function SettingsPage() {
           </div>
         </SettingCard>
 
-        <SettingCard icon={ScrollText} title="Terms & Conditions" description="Shown on the donation page for donors to accept.">
+        <SettingCard icon={ScrollText} title="Terms & Conditions" description="Shown on the sponsorship page for sponsors to accept.">
           <textarea
             value={terms} onChange={(e) => setTerms(e.target.value)} rows={10}
             className="field-input resize-y whitespace-pre-line font-body text-sm leading-relaxed"
           />
           <div className="mt-3 flex justify-end">
-            <button onClick={saveTerms} className="btn-primary btn-md" disabled={terms === settings.terms}>
+            <button
+              onClick={() => save({ terms }, 'Terms & Conditions saved.')}
+              className="btn-primary btn-md"
+              disabled={terms === settings.terms}
+            >
               <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
               Save terms
             </button>
@@ -153,7 +215,7 @@ export default function SettingsPage() {
 
         <SettingCard
           icon={Landmark} title="Bank accounts"
-          description={`Up to ${MAX_BANKS} accounts appear in the donation page dropdown.`}
+          description={`Up to ${MAX_BANKS} accounts appear in the sponsorship page dropdown.`}
           action={
             <button
               onClick={() => {
@@ -169,7 +231,7 @@ export default function SettingsPage() {
         >
           {settings.banks.length === 0 ? (
             <p className="rounded-2xl bg-parchment px-4 py-6 text-center text-sm text-ink/55">
-              No bank accounts yet. Add one so donors know where to transfer.
+              No bank accounts yet. Add one so sponsors know where to transfer.
             </p>
           ) : (
             <ul className="space-y-3">
@@ -187,7 +249,14 @@ export default function SettingsPage() {
                       <Pencil className="h-4 w-4" aria-hidden="true" /> Edit
                     </button>
                     <button
-                      onClick={() => { deleteBank(b.id); toast(`${b.bankName} removed.`, { type: 'info' }) }}
+                      onClick={async () => {
+                        try {
+                          await deleteBank(b.id)
+                          toast(`${b.bankName} removed.`, { type: 'info' })
+                        } catch (e) {
+                          toast(e.message, { type: 'error' })
+                        }
+                      }}
                       className="btn-sm btn border border-red-200 bg-white text-red-600 hover:bg-red-50 focus-visible:ring-red-400"
                       aria-label={`Delete ${b.bankName}`}
                     >
@@ -199,60 +268,62 @@ export default function SettingsPage() {
             </ul>
           )}
         </SettingCard>
-
-        <SettingCard icon={DatabaseBackup} title="Demo data" description="Reset all products, settings, and donation records back to the original demo content.">
-          <button
-            onClick={() => setConfirmReset(true)}
-            className="btn-md btn border border-red-200 bg-white text-red-600 hover:bg-red-50 focus-visible:ring-red-400"
-          >
-            <DatabaseBackup className="h-4 w-4" aria-hidden="true" />
-            Reset demo data
-          </button>
-        </SettingCard>
       </div>
 
       {bankEditor.open && (
         <BankEditor
           bank={bankEditor.bank}
           onClose={() => setBankEditor({ open: false, bank: null })}
-          onSave={(data) => {
-            if (bankEditor.bank) { updateBank(bankEditor.bank.id, data); toast('Bank updated.') }
-            else { addBank(data); toast('Bank added.') }
-            setBankEditor({ open: false, bank: null })
+          onSave={async (data) => {
+            try {
+              if (bankEditor.bank) { await updateBank(bankEditor.bank.id, data); toast('Bank updated.') }
+              else { await addBank(data); toast('Bank added.') }
+              setBankEditor({ open: false, bank: null })
+            } catch (e) {
+              toast(e.message, { type: 'error', duration: 6000 })
+            }
           }}
         />
       )}
-
-      <Modal
-        open={confirmReset} onClose={() => setConfirmReset(false)} title="Reset demo data" size="sm"
-        footer={
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setConfirmReset(false)} className="btn-ghost btn-md">Cancel</button>
-            <button
-              onClick={() => {
-                resetDemo()
-                setConfirmReset(false)
-                toast('Demo data has been reset.')
-                setTimeout(() => window.location.reload(), dataMode === 'firebase' ? 1200 : 400)
-              }}
-              className="btn-md btn bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500"
-            >
-              Reset everything
-            </button>
-          </div>
-        }
-      >
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500">
-            <AlertTriangle className="h-5 w-5" />
-          </span>
-          <p className="text-ink/75">
-            This restores the five demo animals and default settings, and clears all reservations and
-            donation records.{dataMode === 'firebase' ? ' Because you’re in global mode, this affects the live site for everyone.' : ''} This can’t be undone.
-          </p>
-        </div>
-      </Modal>
     </>
+  )
+}
+
+function CategoryPartial({ icon: Icon, title, enabled, onToggle, value, onChange, onSave, disabled, inputId }) {
+  return (
+    <div className="rounded-2xl border border-black/5 bg-parchment p-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className="flex items-center gap-2 font-heading font-semibold text-pine">
+          <Icon className="h-4 w-4 text-brand-500" aria-hidden="true" />
+          {title}
+        </p>
+        <button
+          type="button" role="switch" aria-checked={enabled} aria-label={`Partial payments for ${title}`}
+          onClick={() => onToggle(!enabled)} disabled={disabled}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed ${
+            enabled ? 'bg-brand-500' : 'bg-black/15'
+          }`}
+        >
+          <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${enabled ? 'left-6' : 'left-1'}`} />
+        </button>
+      </div>
+      <label className="field-label mt-4" htmlFor={inputId}>Minimum value (PKR)</label>
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/45">Rs</span>
+          <input
+            id={inputId} type="number" min="0" step="5000" value={value} disabled={disabled}
+            onChange={(e) => onChange(e.target.value)} className="field-input pl-9 disabled:opacity-60"
+          />
+        </div>
+        <button onClick={onSave} disabled={disabled} className="btn-outline btn-md shrink-0">
+          Save
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-ink/50">
+        Only {title.toLowerCase()} worth this much or more can be partially sponsored.
+      </p>
+    </div>
   )
 }
 

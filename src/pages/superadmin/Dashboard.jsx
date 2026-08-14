@@ -1,26 +1,32 @@
 import { Link } from 'react-router-dom'
 import {
-  PackageSearch, ClipboardCheck, ScrollText, Settings, Heart, CircleDot, CheckCircle2, Gift, ArrowRight,
+  PackageSearch, ClipboardCheck, ScrollText, Settings, Heart, CircleDot, CheckCircle2, Gift,
+  ArrowRight, Users,
 } from 'lucide-react'
 import { useApp } from '../../store/AppContext.jsx'
 import { formatMoney } from '../../lib/currency.js'
 
 export default function Dashboard() {
-  const { availableProducts, reservedProducts, donatedProducts, donations } = useApp()
-  const totalRaised = donations.reduce((s, d) => s + (Number(d.amountPKR) || 0), 0)
+  const { availableProducts, reservedProducts, completedProducts, sponsorships } = useApp()
+
+  const pendingCount = sponsorships.filter((s) => s.status === 'pending').length
+  const totalRaised = sponsorships
+    .filter((s) => s.status === 'confirmed')
+    .reduce((sum, s) => sum + (Number(s.amountPKR) || 0), 0)
 
   const stats = [
-    { label: 'Available', value: availableProducts.length, icon: Heart, tone: 'text-brand-600 bg-brand-50' },
-    { label: 'Reserved', value: reservedProducts.length, icon: CircleDot, tone: 'text-gold-700 bg-gold-100' },
-    { label: 'Donated', value: donatedProducts.length, icon: CheckCircle2, tone: 'text-moss-dark bg-moss/15' },
-    { label: 'Total raised', value: formatMoney(totalRaised, 'PKR'), icon: Gift, tone: 'text-pine bg-sand' },
+    { label: 'Open for sponsorship', value: availableProducts.length, icon: Heart, tone: 'text-brand-600 bg-brand-50' },
+    { label: 'Awaiting confirmation', value: pendingCount, icon: CircleDot, tone: 'text-gold-700 bg-gold-100' },
+    { label: 'Fully sponsored', value: completedProducts.length, icon: CheckCircle2, tone: 'text-moss-dark bg-moss/15' },
+    { label: 'Total confirmed', value: formatMoney(totalRaised, 'PKR'), icon: Gift, tone: 'text-pine bg-sand' },
   ]
 
   const actions = [
-    { to: '/super-admin/products', label: 'Manage products', desc: 'Create, edit, and remove animals.', icon: PackageSearch },
-    { to: '/super-admin/confirmations', label: 'Confirm donations', desc: 'Confirm or release reserved animals.', icon: ClipboardCheck, badge: reservedProducts.length },
-    { to: '/super-admin/donations', label: 'Donations made', desc: 'Full donor and recipient records.', icon: ScrollText },
-    { to: '/super-admin/settings', label: 'Settings', desc: 'Toggles, terms, banks, exchange rates.', icon: Settings },
+    { to: '/super-admin/products', label: 'Manage products', desc: 'Create, edit, and remove live stock and equipment.', icon: PackageSearch },
+    { to: '/super-admin/confirmations', label: 'Confirm sponsorships', desc: 'Confirm or release pending contributions.', icon: ClipboardCheck, badge: pendingCount },
+    { to: '/super-admin/sponsorships', label: 'Sponsorships made', desc: 'Every completed item with all its sponsors.', icon: ScrollText },
+    { to: '/super-admin/settings', label: 'Settings', desc: 'Toggles, partial payments, terms, banks, rates.', icon: Settings },
+    { to: '/super-admin/admin-users', label: 'Admin users', desc: 'Invite teammates and manage their access.', icon: Users },
   ]
 
   return (
@@ -34,7 +40,7 @@ export default function Dashboard() {
             <span className={`flex h-10 w-10 items-center justify-center rounded-2xl ${s.tone}`}>
               <s.icon className="h-5 w-5" aria-hidden="true" />
             </span>
-            <p className="mt-3 font-heading text-2xl font-bold text-pine">{s.value}</p>
+            <p className="mt-3 truncate font-heading text-2xl font-bold text-pine">{s.value}</p>
             <p className="text-sm text-ink/55">{s.label}</p>
           </div>
         ))}
