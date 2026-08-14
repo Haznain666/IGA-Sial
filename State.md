@@ -108,10 +108,14 @@ Partial payments were switched on, exercised end to end, and switched back off a
   hover (spec §7). Recipient modal focuses the first field and holds focus while typing (Gotchas §10).
 - All QA rows deleted afterwards; ledger empty, all 9 products `available`, partial toggles back off.
 
-**Known defect (open):** several `[role="switch"]` toggles render **without an `aria-label`** — the three
-"Sponsorship experience" switches, the partial-payment master switch, and the sponsor-page "Partial
-sponsor" switch. Screen-reader users cannot tell them apart. The two category switches are labelled
-correctly and can be copied as the pattern.
+**Fixed (was a defect):** four `[role="switch"]` toggles reached screen readers with **no accessible
+name**. Root cause: they used `<label htmlFor={id}>`, but a `<button role="switch">` is **not a labelable
+element**, so `htmlFor` bound to nothing. Now wired with `aria-labelledby` + `aria-describedby`.
+Verified on the live deploy — all six switches announce correctly:
+"Allow multi-select on the selection page", "Gather recipient info on confirm", "Collect owner info on
+Manage Products", "Enable partial payments", "Partial payments for Live Stock / Equipment", and the
+sponsor page's "Partial sponsor".
+**Don't reintroduce it:** never use `<label htmlFor>` on a switch built from a `<button>`.
 
 **Open items:**
 - ✅ **Auth is live.** SMTP runs through Resend (`smtp.resend.com:465`, user `resend`, sender
