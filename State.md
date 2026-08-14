@@ -113,6 +113,22 @@ Partial payments were switched on, exercised end to end, and switched back off a
   hover (spec §7). Recipient modal focuses the first field and holds focus while typing (Gotchas §10).
 - All QA rows deleted afterwards; ledger empty, all 9 products `available`, partial toggles back off.
 
+**Fixed (was a defect):** a **confirmed** contribution on an item that was not yet fully sponsored
+became invisible in Super Admin — it left Confirm sponsorships (no longer `pending`) but had not reached
+Sponsorships made (which lists only fully sponsored items). Confirmations now has a read-only
+**"Confirmed, still collecting"** section. Spec §5d is unchanged: Sponsorships made still lists only
+completed items.
+
+**Input masks.** `formatCNIC` → `12345-1234567-1` and `formatMobile` → `0300-123 4567` (both in
+`lib/helpers.js`) are applied as the user types, on the recipient dialog and the villager-owner form.
+**Deliberately NOT applied to the sponsor's phone on checkout** — sponsors pay in USD/AUD/SAR and are
+often overseas, so a Pakistani mask would corrupt a valid foreign number.
+
+**Admin money fields** use `formatAmountInput` / `parseAmountInput` (`lib/currency.js`): thousands
+separators while typing, 2dp settled on blur. They are `type="text"` + `inputMode="decimal"` because
+`<input type="number">` cannot display separators. Decimals are NOT applied mid-keystroke — doing so
+fights the caret and makes the field unusable.
+
 **Chip states (current spec — supersedes the earlier §5b "nothing until confirmed" rule).**
 `src/components/PartialChips.jsx` renders exactly ONE chip, in priority order:
 
