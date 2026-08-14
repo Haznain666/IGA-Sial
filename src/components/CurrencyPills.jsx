@@ -1,7 +1,7 @@
 import { convertFromPKR, formatMoney } from '../lib/currency.js'
 import { useApp } from '../store/AppContext.jsx'
 
-// Shows the PKR donation value prominently with USD / AUD / SAR conversions,
+// Shows the PKR sponsorship value prominently with USD / AUD / SAR conversions,
 // using the live exchange rates from Settings.
 export default function CurrencyPills({ valuePKR, size = 'md', rates, className = '' }) {
   const { settings } = useApp()
