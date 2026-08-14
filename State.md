@@ -89,18 +89,43 @@ product cards, partial payments, pagination, slim confirmation cards, Supabase A
 - Two bugs found and fixed here: public/ images were not base-path aware (404'd on Pages — see
   `assetUrl()` in `lib/images.js`), and one Unsplash photo had been removed upstream.
 
+**Full end-to-end QA passed against the live deploy, signed in as a real admin (2026-08-14):**
+Partial payments were switched on, exercised end to end, and switched back off afterwards. Verified:
+- Eligibility rule is exact — with thresholds 100k/200k, 8 of 9 items showed the "Partial sponsorship
+  available" chip; the Rs 165,000 Chaff Cutter (below the 200k equipment minimum) correctly did not.
+- A Rs 40,000 partial on Noor (Rs 120,000) → ledger row `is_partial`, status `partial`, remaining
+  Rs 80,000, **`value_pkr` never mutated**. Item stayed publicly visible.
+- Chip behaviour matches spec §5b exactly: nothing shown while pending; only after admin confirmation did
+  "Partially sponsored · Rs 80,000 left" appear.
+- Amount input is bound to **remaining**, not full value (`min=1 max=80000` after the first payment), and
+  the sponsor page defaults to the remaining balance.
+- Over-sponsorship (Rs 100,000 against Rs 80,000 remaining) is blocked client-side in `handleSubmit`
+  before any API call, with the DB trigger as a second line of defence.
+- Second partial completing the value → item **disappeared from the public site** (spec §8).
+- Sponsorships Made shows **one** card, "2 sponsors", both sponsors with contact details and their
+  individual amounts, recipient, and a Fully-sponsored timestamp (spec §5d).
+- Confirmations card is 404px vs 861px public, no main image, thumbnails 34×42 magnifying to 178×222 on
+  hover (spec §7). Recipient modal focuses the first field and holds focus while typing (Gotchas §10).
+- All QA rows deleted afterwards; ledger empty, all 9 products `available`, partial toggles back off.
+
+**Known defect (open):** several `[role="switch"]` toggles render **without an `aria-label`** — the three
+"Sponsorship experience" switches, the partial-payment master switch, and the sponsor-page "Partial
+sponsor" switch. Screen-reader users cannot tell them apart. The two category switches are labelled
+correctly and can be copied as the pattern.
+
 **Open items:**
-- ⛔ **No admin account exists yet** — blocked on SMTP below. The plan is to invite
-  `haznain666@gmail.com` through the real invite flow so the owner sets their own password (which also
-  proves the pipeline). The `on_auth_user_created` trigger writes the `admin_profiles` row automatically.
-- ⛔ **SMTP not yet saved.** Resend account + API key exist and `codexmill.com` DNS is in; the key must
-  be pasted into Supabase → Auth → SMTP (host `smtp.resend.com`, port 465, user `resend`, sender
-  `info@codexmill.com`). Until then invites and resets do not deliver.
+- ✅ **Auth is live.** SMTP runs through Resend (`smtp.resend.com:465`, user `resend`, sender
+  `info@codexmill.com`). Site URL and the redirect allow-list point at the Pages deploy. The first Super
+  Admin (`haznain666@gmail.com`) was invited by email, set their own password, and signed in; the
+  `on_auth_user_created` trigger wrote the `admin_profiles` row (role `admin`, active).
+  **Gotcha:** Resend rejects every send until the domain is marked Verified in its dashboard — correct
+  DNS records are not enough, someone must press Verify. That failure surfaces as a bare `500` on
+  `/auth/v1/invite`; the real message is in Auth Logs.
 - ⛔ **Hostinger deploy blocked** — the Hostinger MCP connector returns `Unauthenticated`. Needs an API
   token (hPanel → API) in the MCP config. GitHub Pages is the interim host meanwhile.
-- **Supabase Auth URL config still points at defaults** — set Site URL and redirect URLs to the final
-  domain once hosting is settled, or invite/reset links will point at the wrong origin.
-- Everything admin-authenticated is **untested against live writes**, because no login exists yet.
+- **Re-point Supabase Auth URLs when hosting moves.** Site URL and the redirect allow-list currently
+  target the Pages deploy; update both when the site lands on its final domain, or invite and reset links
+  will point at the wrong origin.
 
 ---
 
