@@ -29,11 +29,11 @@ export default function ThankYou() {
         </span>
         <h1 className="mt-5 font-heading text-2xl font-bold text-pine">Thank you for your kindness</h1>
         <p className="mt-2 max-w-sm text-ink/60">
-          If you were completing a donation, our team will be in touch. You can browse more animals
-          any time.
+          If you were completing a sponsorship, our team will be in touch. You can browse live stock and
+          equipment any time.
         </p>
         <Link to="/select" className="btn-primary btn-lg mt-8">
-          Browse animals
+          Browse live stock &amp; equipment
         </Link>
       </div>
     )
@@ -49,10 +49,10 @@ export default function ThankYou() {
           Thank you{info.donorFirstName ? `, ${info.donorFirstName}` : ''}!
         </h1>
         <p className="mt-3 text-ink/70">
-          {info.animalNames?.length === 1
-            ? `${info.animalNames[0]} is reserved for you.`
-            : `${info.animalNames?.length} animals are reserved for you.`}{' '}
-          Please complete your transfer below — our team will confirm your donation once it’s received.
+          {info.names?.length === 1
+            ? `${info.names[0]} is reserved for you.`
+            : `${info.names?.length} items are reserved for you.`}{' '}
+          Please complete your transfer below — our team will confirm your sponsorship once it’s received.
         </p>
       </div>
 
@@ -64,7 +64,7 @@ export default function ThankYou() {
           </span>
         </div>
         <ul className="mt-3 flex flex-wrap gap-2">
-          {info.animalNames?.map((n) => (
+          {info.names?.map((n) => (
             <li key={n} className="chip bg-brand-50 text-sm text-brand-700">
               {n}
             </li>
@@ -93,7 +93,7 @@ export default function ThankYou() {
             {bank.branch && <Row label="Branch" value={bank.branch} />}
           </dl>
           <p className="mt-3 text-xs text-ink/50">
-            Keep your transfer receipt. Reserved animals are held for you until our team confirms.
+            Keep your transfer receipt. What you reserved is held for you until our team confirms.
           </p>
         </div>
       )}
@@ -105,7 +105,7 @@ export default function ThankYou() {
         </button>
         <Link to="/select" className="btn-primary btn-lg">
           <Heart className="h-5 w-5" aria-hidden="true" />
-          Donate another
+          Sponsor another
         </Link>
       </div>
     </div>

@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, Trash2, Copy, Landmark, ShieldCheck, HandHeart, PackageOpen } from 'lucide-react'
+import { Heart, Trash2, Copy, Landmark, ShieldCheck, HandHeart, PackageOpen, PiggyBank } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import CurrencyPills from '../components/CurrencyPills.jsx'
@@ -12,24 +12,46 @@ import { imageUrl } from '../lib/images.js'
 
 const EMPTY = { firstName: '', lastName: '', email: '', phone: '' }
 
-export default function DonationPage() {
+export default function SponsorPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { availableProducts, cart, settings, removeFromCart, reserve } = useApp()
+  const { availableProducts, cart, settings, removeFromCart, sponsor, remainingOf, isPartialEligible } = useApp()
 
-  const animals = useMemo(
+  const items = useMemo(
     () => availableProducts.filter((p) => cart.includes(p.id)),
     [availableProducts, cart],
   )
-  const total = animals.reduce((sum, p) => sum + (Number(p.valuePKR) || 0), 0)
 
   const [form, setForm] = useState(EMPTY)
   const [errors, setErrors] = useState({})
   const [accepted, setAccepted] = useState(false)
   const [bankId, setBankId] = useState(settings.banks[0]?.id || '')
+  const [busy, setBusy] = useState(false)
+  // Per-item partial state: { [productId]: { partial: bool, value: string } }
+  const [partials, setPartials] = useState({})
   const formRef = useRef(null)
 
+  // Settings stream in from Supabase after mount, so the dropdown's default has
+  // to be applied once the banks actually arrive — otherwise the visible first
+  // option and the submitted bankId disagree.
+  useEffect(() => {
+    if (!bankId && settings.banks.length) setBankId(settings.banks[0].id)
+  }, [bankId, settings.banks])
+
   const selectedBank = settings.banks.find((b) => b.id === bankId) || null
+
+  const entryFor = (p) => partials[p.id] || { partial: false, value: '' }
+  const amountFor = (p) => {
+    const remaining = remainingOf(p.id)
+    const entry = entryFor(p)
+    if (!entry.partial) return remaining
+    const n = Number(entry.value)
+    return Number.isFinite(n) ? n : 0
+  }
+  const total = items.reduce((sum, p) => sum + amountFor(p), 0)
+
+  const setPartial = (id, patch) =>
+    setPartials((prev) => ({ ...prev, [id]: { ...(prev[id] || { partial: false, value: '' }), ...patch } }))
 
   const validate = () => {
     const e = {}
@@ -38,6 +60,13 @@ export default function DonationPage() {
     if (!isEmail(form.email)) e.email = 'Enter a valid email address.'
     if (!isPhone(form.phone)) e.phone = 'Enter a valid phone number.'
     if (!accepted) e.accepted = 'Please accept the Terms & Conditions to proceed.'
+    items.forEach((p) => {
+      if (!entryFor(p).partial) return
+      const remaining = remainingOf(p.id)
+      const n = Number(entryFor(p).value)
+      if (!Number.isFinite(n) || n <= 0) e[`amt_${p.id}`] = 'Enter an amount greater than zero.'
+      else if (n > remaining) e[`amt_${p.id}`] = `That is more than the ${formatMoney(remaining, 'PKR')} still open.`
+    })
     setErrors(e)
     return e
   }
@@ -47,13 +76,15 @@ export default function DonationPage() {
     if (errors[key]) setErrors((er) => ({ ...er, [key]: undefined }))
   }
 
-  const handleSubmit = (ev) => {
+  const handleSubmit = async (ev) => {
     ev.preventDefault()
+    if (busy) return
     const e = validate()
     if (Object.values(e).some(Boolean)) {
       const firstKey = ['firstName', 'lastName', 'email', 'phone'].find((k) => e[k])
       if (firstKey) formRef.current?.querySelector(`[name="${firstKey}"]`)?.focus()
-      if (e.accepted && !firstKey) toast(e.accepted, { type: 'error' })
+      else if (e.accepted) toast(e.accepted, { type: 'error' })
+      else toast('Please check the sponsorship amounts.', { type: 'error' })
       return
     }
     const donor = {
@@ -62,16 +93,28 @@ export default function DonationPage() {
       email: form.email.trim(),
       phone: form.phone.trim(),
     }
-    const ids = animals.map((a) => a.id)
-    const animalNames = animals.map((a) => a.name)
-    reserve(ids, donor, bankId || null)
-    toast(
-      `Thank you, ${donor.firstName}! ${ids.length} ${ids.length === 1 ? 'animal is' : 'animals are'} reserved for you.`,
-      { duration: 6000 },
-    )
-    navigate('/thank-you', {
-      state: { animalNames, totalPKR: total, donorFirstName: donor.firstName, bankId: bankId || null },
-    })
+    const payload = items.map((p) => ({
+      productId: p.id,
+      amountPKR: Math.round(amountFor(p)),
+      isPartial: entryFor(p).partial,
+    }))
+    const names = items.map((p) => p.name)
+
+    setBusy(true)
+    try {
+      await sponsor(payload, donor, bankId || null)
+      toast(
+        `Thank you, ${donor.firstName}! ${names.length} ${names.length === 1 ? 'item is' : 'items are'} reserved for you.`,
+        { duration: 6000 },
+      )
+      navigate('/thank-you', {
+        state: { names, totalPKR: total, donorFirstName: donor.firstName, bankId: bankId || null },
+      })
+    } catch (err) {
+      toast(err.message, { type: 'error', duration: 6000 })
+    } finally {
+      setBusy(false)
+    }
   }
 
   const copy = (text, label) => {
@@ -82,18 +125,18 @@ export default function DonationPage() {
     )
   }
 
-  if (animals.length === 0) {
+  if (items.length === 0) {
     return (
       <>
-        <PageHeader eyebrow="Donation" title="Complete your donation" />
+        <PageHeader eyebrow="Sponsorship" title="Complete your sponsorship" />
         <div className="container-x py-12">
           <EmptyState
             icon={PackageOpen}
-            title="No animals selected yet"
-            description="Choose one or more animals to donate, then return here to complete your details."
+            title="Nothing selected yet"
+            description="Choose live stock or equipment to sponsor, then return here to complete your details."
             action={
               <button onClick={() => navigate('/select')} className="btn-primary btn-md">
-                Browse animals
+                Browse live stock &amp; equipment
               </button>
             }
           />
@@ -105,22 +148,22 @@ export default function DonationPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Donation"
-        title="Complete your donation"
+        eyebrow="Sponsorship"
+        title="Complete your sponsorship"
         subtitle="Enter your details, review your gift, and choose where to deposit. Our team confirms every transfer."
         backTo="/select"
         backLabel="Back to selection"
       />
 
       <div className="container-x grid gap-8 py-10 sm:py-12 lg:grid-cols-5 lg:gap-10">
-        <form ref={formRef} onSubmit={handleSubmit} noValidate className="lg:col-span-3">
+        <form ref={formRef} onSubmit={handleSubmit} noValidate className="min-w-0 lg:col-span-3">
           <section className="card p-6 sm:p-8">
             <div className="flex items-center gap-2">
               <HandHeart className="h-5 w-5 text-brand-500" aria-hidden="true" />
               <h2 className="font-heading text-xl font-semibold text-pine">Your details</h2>
             </div>
             <p className="mt-1 text-sm text-ink/55">
-              We use these only to process your donation and send your certificate and updates.
+              We use these only to process your sponsorship and send your certificate and updates.
             </p>
 
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
@@ -182,8 +225,8 @@ export default function DonationPage() {
               <h2 className="font-heading text-xl font-semibold text-pine">Bank details</h2>
             </div>
             <p className="mt-1 text-sm text-ink/55">
-              Choose an account and transfer your donation. Keep your receipt — our team will confirm
-              it.
+              Choose an account and transfer your sponsorship. Keep your receipt — our team will
+              confirm it.
             </p>
 
             {settings.banks.length === 0 ? (
@@ -233,47 +276,138 @@ export default function DonationPage() {
           </section>
         </form>
 
-        <aside className="lg:col-span-2">
+        <aside className="min-w-0 lg:col-span-2">
           <div className="sticky top-24 card p-6 sm:p-8">
             <h2 className="font-heading text-xl font-semibold text-pine">Your gift</h2>
-            <ul className="mt-5 space-y-3">
-              {animals.map((a) => (
-                <li key={a.id} className="flex items-center gap-3">
-                  <img
-                    src={imageUrl(a.images?.[0])}
-                    alt={a.name}
-                    className="h-16 w-14 shrink-0 rounded-xl object-cover"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-heading font-semibold text-pine">{a.name}</p>
-                    <p className="text-xs text-ink/50">
-                      {a.type} · {formatMoney(a.valuePKR, 'PKR')}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => removeFromCart(a.id)}
-                    className="rounded-full p-1.5 text-ink/40 transition-colors hover:bg-red-50 hover:text-red-500"
-                    aria-label={`Remove ${a.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </li>
-              ))}
+            <ul className="mt-5 space-y-4">
+              {items.map((p) => {
+                const remaining = remainingOf(p.id)
+                const eligible = isPartialEligible(p)
+                const entry = entryFor(p)
+                const amountError = errors[`amt_${p.id}`]
+                return (
+                  <li key={p.id} className="rounded-2xl border border-black/5 bg-parchment/60 p-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={imageUrl(p.images?.[0])}
+                        alt={p.name}
+                        className="h-16 w-14 shrink-0 rounded-xl object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-heading font-semibold text-pine">{p.name}</p>
+                        <p className="truncate text-xs text-ink/50">
+                          {p.kind === 'equipment' ? 'Equipment' : p.type || 'Live Stock'} ·{' '}
+                          {formatMoney(p.valuePKR, 'PKR')}
+                        </p>
+                        <p className="mt-0.5 text-xs font-medium text-brand-600">
+                          {formatMoney(remaining, 'PKR')} still open
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFromCart(p.id)}
+                        className="rounded-full p-1.5 text-ink/40 transition-colors hover:bg-red-50 hover:text-red-500"
+                        aria-label={`Remove ${p.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {eligible && (
+                      <div className="mt-3 border-t border-black/5 pt-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex gap-2">
+                            <PiggyBank className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" aria-hidden="true" />
+                            <label htmlFor={`partial-${p.id}`} className="text-sm font-medium text-ink">
+                              Partial sponsor
+                            </label>
+                          </div>
+                          <button
+                            id={`partial-${p.id}`}
+                            type="button"
+                            role="switch"
+                            aria-checked={entry.partial}
+                            onClick={() =>
+                              setPartial(p.id, {
+                                partial: !entry.partial,
+                                value: !entry.partial ? String(remaining) : '',
+                              })
+                            }
+                            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+                              entry.partial ? 'bg-brand-500' : 'bg-black/15'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                                entry.partial ? 'left-6' : 'left-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-ink/55">
+                          Give any amount towards this item instead of its full value. Others can
+                          sponsor the rest, and it is only gifted once the total is reached.
+                        </p>
+
+                        {entry.partial && (
+                          <div className="mt-3">
+                            <label className="field-label" htmlFor={`amount-${p.id}`}>
+                              Your amount (PKR)
+                            </label>
+                            <div className="relative">
+                              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/45">
+                                Rs
+                              </span>
+                              <input
+                                id={`amount-${p.id}`}
+                                type="number"
+                                min="1"
+                                max={remaining}
+                                step="500"
+                                value={entry.value}
+                                onChange={(e) => {
+                                  setPartial(p.id, { value: e.target.value })
+                                  if (amountError) setErrors((er) => ({ ...er, [`amt_${p.id}`]: undefined }))
+                                }}
+                                aria-invalid={!!amountError}
+                                className={`field-input pl-9 ${amountError ? 'field-input-invalid' : ''}`}
+                              />
+                            </div>
+                            <p className="mt-1 text-xs text-ink/50">
+                              Between {formatMoney(1, 'PKR')} and {formatMoney(remaining, 'PKR')}.
+                            </p>
+                            {amountError && (
+                              <p className="mt-1 text-sm text-red-600" role="alert">
+                                {amountError}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
 
             <div className="mt-6 border-t border-black/5 pt-5">
-              <p className="text-sm text-ink/55">Total donation</p>
+              <p className="text-sm text-ink/55">Total sponsorship</p>
               <div className="mt-2">
                 <CurrencyPills valuePKR={total} size="lg" />
               </div>
             </div>
 
-            <button type="submit" onClick={handleSubmit} className="btn-gold btn-lg mt-6 w-full">
+            <button
+              type="submit"
+              onClick={handleSubmit}
+              disabled={busy}
+              className="btn-gold btn-lg mt-6 w-full"
+            >
               <Heart className="h-5 w-5" aria-hidden="true" />
-              Proceed to donate
+              {busy ? 'Reserving…' : 'Proceed to sponsor'}
             </button>
             <p className="mt-3 text-center text-xs text-ink/45">
-              Animals are reserved for you. You confirm the donation on the next step.
+              Your contribution is held for you. Our team confirms it once your transfer arrives.
             </p>
           </div>
         </aside>
