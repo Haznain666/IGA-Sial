@@ -27,10 +27,10 @@ export default function Contact() {
                 Get in touch
               </p>
               <h2 className="text-balance text-3xl font-semibold leading-tight sm:text-4xl">
-                Ready to donate a cow?
+                Ready to sponsor?
               </h2>
               <p className="mt-5 text-lg leading-relaxed text-cream/85">
-                We would love to welcome you as a Project Partner. Choose the cow that speaks to you,
+                We would love to welcome you as a Project Partner. Choose the live stock or equipment that speaks to you,
                 and we will take care of the rest — from payment in your preferred currency to your
                 first update from the farm.
               </p>
@@ -38,7 +38,7 @@ export default function Contact() {
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link to="/select" className="btn-gold btn-lg">
                   <Heart className="h-5 w-5" aria-hidden="true" />
-                  Donate a cow
+                  Sponsor now
                 </Link>
                 <a href="mailto:igasialfarm@gmail.com" className="btn-lg btn border border-cream/30 bg-white/10 text-cream hover:bg-white/20">
                   <Mail className="h-5 w-5" aria-hidden="true" />
@@ -84,7 +84,7 @@ export default function Contact() {
               </div>
 
               <div className="mt-4 rounded-2xl bg-pine p-6">
-                <h3 className="font-heading font-semibold text-cream">Donation payment options</h3>
+                <h3 className="font-heading font-semibold text-cream">Sponsorship payment options</h3>
                 <ul className="mt-4 space-y-3">
                   {PAYMENTS.map((p) => (
                     <li key={p.text} className="flex items-center gap-3 text-sm text-cream/80">

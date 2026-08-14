@@ -16,7 +16,7 @@ const HIGHLIGHTS = [
   {
     icon: ShieldCheck,
     title: 'Transparency & accountability',
-    text: 'The Manzil App (under development) lets donors track animal welfare, milk production, and impact directly.',
+    text: 'The Manzil App (under development) lets sponsors track animal welfare, equipment in use, milk production, and impact directly.',
   },
   {
     icon: GraduationCap,

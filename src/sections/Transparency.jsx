@@ -2,7 +2,7 @@ import Reveal from '../components/Reveal.jsx'
 import { Smartphone, Activity, Sun, Wallet, Milk, HeartPulse } from 'lucide-react'
 
 const FEATURES = [
-  { icon: HeartPulse, title: 'Animal welfare', text: 'Health, welfare, and productivity of your donated cow.' },
+  { icon: HeartPulse, title: 'Animal welfare', text: 'Health, welfare, and productivity of the live stock you sponsored.' },
   { icon: Sun, title: 'Green energy', text: 'Contribute solar panels, batteries, and farm equipment.' },
   { icon: Wallet, title: 'Profit reinvestment', text: 'See how profits fund education, jobs, and empowerment.' },
 ]
@@ -25,12 +25,12 @@ export default function Transparency() {
               <span className="rounded-full bg-gold-400/20 px-2 py-0.5 text-sm font-medium text-gold-200">
                 under development
               </span>
-              , global Project Partners can donate towards cows, contribute green-energy solutions,
+              , global Project Partners can sponsor live stock and equipment, contribute green-energy solutions,
               farm equipment, or operations — and track the progress of every contribution.
             </p>
             <p>
               The app provides complete transparency: the health, welfare, and productivity of your
-              donated cow, and how the farm’s profits are reinvested into education, jobs, and
+              sponsored live stock and equipment, and how the farm’s profits are reinvested into education, jobs, and
               women’s empowerment.
             </p>
           </div>

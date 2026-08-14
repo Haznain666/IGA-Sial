@@ -43,7 +43,7 @@ export default function Hero() {
           className="eyebrow mb-5 !text-gold-300"
         >
           <Sprout className="h-4 w-4" aria-hidden="true" />
-          Donate-a-Cow Program
+          Sponsor a Live Stock or Equipment
         </motion.p>
 
         <motion.h1
@@ -57,14 +57,15 @@ export default function Hero() {
           variants={item}
           className="mt-6 max-w-xl text-lg leading-relaxed text-cream/85 sm:text-xl"
         >
-          Choose a cow, pay for it, and we donate it to a family in need — while your gift keeps
-          giving through fair income, dignified work, and a self-sustaining rural community.
+          Sponsor a live stock animal or a piece of farm equipment. We gift it on your behalf to a
+          family in need — and your gift keeps giving through fair income, dignified work, and a
+          self-sustaining rural community.
         </motion.p>
 
         <motion.div variants={item} className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Link to="/select" className="btn-gold btn-lg w-full sm:w-auto">
             <Heart className="h-5 w-5" aria-hidden="true" />
-            Donate a cow
+            Sponsor now
           </Link>
           <a
             href="#herd"

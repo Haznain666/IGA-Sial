@@ -6,24 +6,24 @@ import { Search, HandCoins, LineChart, Award, Camera, HeartHandshake, BadgeCheck
 const STEPS = [
   {
     icon: Search,
-    title: 'Browse the herd',
-    text: 'Look through the profiles and choose the cow whose story speaks to you.',
+    title: 'Browse the herd and the equipment',
+    text: 'Look through the live stock profiles and the farm equipment, and choose what speaks to you.',
   },
   {
     icon: HandCoins,
-    title: 'Confirm your donation',
-    text: 'Select your cow and pay through simple options in your preferred currency.',
+    title: 'Confirm your sponsorship',
+    text: 'Select your live stock or equipment and pay through simple options in your preferred currency. Where partial sponsorship is offered, you can give any amount towards the total.',
   },
   {
     icon: LineChart,
     title: 'Follow the impact',
-    text: 'Through the Manzil App and regular updates, see how your donation changes a family’s life.',
+    text: 'Through the Manzil App and regular updates, see how your sponsorship changes a family’s life.',
   },
 ]
 
 const RECEIVE = [
-  { icon: Award, text: 'A personalised donation certificate with your cow’s name and photo' },
-  { icon: Camera, text: 'Regular photo and welfare updates on your donated cow' },
+  { icon: Award, text: 'A personalised sponsorship certificate naming the live stock or equipment you supported' },
+  { icon: Camera, text: 'Regular photo and welfare updates on what you sponsored' },
   { icon: HeartHandshake, text: 'Visibility into how your contribution supports the community' },
   { icon: BadgeCheck, text: 'Recognition as a Project Partner of IGA Sial Farm' },
 ]
@@ -32,7 +32,7 @@ export default function Process() {
   return (
     <section id="process" className="scroll-mt-20 bg-sand py-14 sm:py-24">
       <div className="container-x">
-        <SectionHeading eyebrow="How it works" title="How Donate-a-Cow works" />
+        <SectionHeading eyebrow="How it works" title="How sponsorship works" />
 
         <div className="mt-14 grid gap-5 md:grid-cols-3">
           {STEPS.map((s, i) => (
@@ -72,7 +72,7 @@ export default function Process() {
             <div className="flex h-full flex-col rounded-3xl bg-brand-500 p-8 text-cream">
               <h3 className="font-heading text-xl font-semibold">Currencies accepted</h3>
               <p className="mt-2 text-sm text-cream/80">
-                Every animal’s value is shown in four currencies for your convenience.
+                Every live stock and equipment value is shown in four currencies for your convenience.
               </p>
               <div className="mt-5 grid grid-cols-2 gap-3">
                 {['PKR', 'USD', 'AUD', 'SAR'].map((c) => (
@@ -89,7 +89,7 @@ export default function Process() {
                 Exchange rates are indicative and updated periodically.
               </p>
               <Link to="/select" className="btn-gold btn-lg mt-6 w-full">
-                Browse the herd
+                Browse live stock &amp; equipment
               </Link>
             </div>
           </Reveal>

@@ -37,6 +37,7 @@ export default function Footer() {
               ['concept', 'The DFaaS model'],
               ['process', 'How it works'],
               ['herd', 'Meet the herd'],
+              ['equipment', 'Sponsor equipment'],
               ['transparency', 'The Manzil App'],
               ['masterplan', 'Growth journey'],
             ].map(([id, label]) => (
@@ -78,7 +79,7 @@ export default function Footer() {
           </ul>
 
           <Link to="/select" className="btn-gold btn-md mt-6">
-            Donate a cow
+            Sponsor now
           </Link>
         </div>
       </div>
@@ -86,7 +87,7 @@ export default function Footer() {
       <div className="border-t border-cream/10">
         <div className="container-x py-5 text-center">
           <p className="text-xs text-cream/50">
-            © {new Date().getFullYear()} IGA Sial Farm · Donate-a-Cow Program. All rights reserved.
+            © {new Date().getFullYear()} IGA Sial Farm · Sponsor-a-Live-Stock &amp; Equipment Program. All rights reserved.
           </p>
         </div>
       </div>

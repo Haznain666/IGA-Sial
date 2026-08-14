@@ -9,6 +9,7 @@ const NAV = [
   { id: 'concept', label: 'The model' },
   { id: 'process', label: 'How it works' },
   { id: 'herd', label: 'Meet the herd' },
+  { id: 'equipment', label: 'Equipment' },
   { id: 'contact', label: 'Contact' },
 ]
 
@@ -62,7 +63,7 @@ export default function Header() {
         <div className="flex items-center gap-2">
           <Link to="/select" className="btn-gold btn-md hidden sm:inline-flex">
             <Heart className="h-4 w-4" aria-hidden="true" />
-            Donate a cow
+            Sponsor now
             {cart.length > 0 && (
               <span className="ml-1 rounded-full bg-ink/85 px-1.5 py-0.5 text-[11px] font-semibold text-cream">
                 {cart.length}
@@ -95,7 +96,7 @@ export default function Header() {
             ))}
             <Link to="/select" onClick={() => setOpen(false)} className="btn-gold btn-lg mt-2">
               <Heart className="h-4 w-4" aria-hidden="true" />
-              Donate a cow
+              Sponsor now
             </Link>
           </nav>
         </div>
