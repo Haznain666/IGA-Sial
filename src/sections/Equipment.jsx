@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import SectionHeading from '../components/SectionHeading.jsx'
 import CurrencyPills from '../components/CurrencyPills.jsx'
+import PartialChips from '../components/PartialChips.jsx'
 import Lightbox from '../components/Lightbox.jsx'
 import { useApp } from '../store/AppContext.jsx'
 import { imageUrl, imageStyle } from '../lib/images.js'
@@ -193,6 +194,8 @@ function FeaturedEquipment({ item, onOpenLightbox }) {
             </div>
           ))}
         </dl>
+
+        <PartialChips product={item} reserveSpace={false} className="mt-5" />
 
         <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <CurrencyPills valuePKR={item.valuePKR} size="lg" />

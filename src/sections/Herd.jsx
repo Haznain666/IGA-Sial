@@ -5,6 +5,7 @@ import Autoplay from 'embla-carousel-autoplay'
 import { ChevronLeft, ChevronRight, Heart, Images, ArrowRight, PackageOpen, Maximize2 } from 'lucide-react'
 import SectionHeading from '../components/SectionHeading.jsx'
 import CurrencyPills from '../components/CurrencyPills.jsx'
+import PartialChips from '../components/PartialChips.jsx'
 import Lightbox from '../components/Lightbox.jsx'
 import { useApp } from '../store/AppContext.jsx'
 import { fullName } from '../lib/helpers.js'
@@ -188,6 +189,8 @@ function FeaturedAnimal({ animal, onOpenLightbox }) {
             </div>
           ))}
         </dl>
+
+        <PartialChips product={animal} reserveSpace={false} className="mt-5" />
 
         <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <CurrencyPills valuePKR={animal.valuePKR} size="lg" />

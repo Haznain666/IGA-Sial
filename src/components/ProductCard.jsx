@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { Images, Check, User2, Building2, Maximize2, PiggyBank, CircleDollarSign } from 'lucide-react'
+import { Images, Check, User2, Building2, Maximize2 } from 'lucide-react'
 import CurrencyPills from './CurrencyPills.jsx'
 import Lightbox from './Lightbox.jsx'
-import { useApp } from '../store/AppContext.jsx'
+import PartialChips from './PartialChips.jsx'
 import { fullName } from '../lib/helpers.js'
-import { formatMoney } from '../lib/currency.js'
 import { imageUrl, imageStyle } from '../lib/images.js'
 
 // THE product card. Live stock and equipment share it so both always render at
@@ -20,16 +19,12 @@ export default function ProductCard({
   showOwner = true,
   className = '',
 }) {
-  const { statsOf, isPartialEligible } = useApp()
   const [lb, setLb] = useState({ open: false, index: 0 })
 
   const images = product.images?.length ? product.images : []
   const isEquipment = product.kind === 'equipment'
   const owner = product.owner || {}
   const ownerLabel = owner.ownedByFarm === false ? fullName(owner) || 'Private owner' : 'IGA Sial Farm'
-  const stats = statsOf(product.id)
-  const eligible = isPartialEligible(product)
-  const partiallySponsored = stats.confirmed > 0 && stats.remaining > 0
 
   // Identical three-cell spec strip for both kinds keeps the height locked.
   const specs = isEquipment
@@ -137,20 +132,7 @@ export default function ProductCard({
         )}
 
         {/* Reserved chip row — keeps the card height identical with or without chips. */}
-        <div className="mt-3 flex min-h-[26px] flex-wrap items-start gap-1.5">
-          {partiallySponsored && (
-            <span className="chip bg-brand-50 text-[11px] font-semibold text-brand-700">
-              <CircleDollarSign className="h-3.5 w-3.5" aria-hidden="true" />
-              Partially sponsored · {formatMoney(stats.remaining, 'PKR')} left
-            </span>
-          )}
-          {eligible && !partiallySponsored && (
-            <span className="chip bg-gold-100 text-[11px] font-semibold text-gold-800">
-              <PiggyBank className="h-3.5 w-3.5" aria-hidden="true" />
-              Partial sponsorship available
-            </span>
-          )}
-        </div>
+        <PartialChips product={product} className="mt-3" />
 
         <div className="mt-3">
           <CurrencyPills valuePKR={product.valuePKR} />
