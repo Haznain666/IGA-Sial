@@ -7,7 +7,9 @@ import PageHeader from '../components/PageHeader.jsx'
 import Modal from '../components/Modal.jsx'
 import { useApp } from '../store/AppContext.jsx'
 import { useToast } from '../store/ToastContext.jsx'
-import { DEFAULT_FX, formatMoney, convertFromPKR } from '../lib/currency.js'
+import {
+  DEFAULT_FX, formatMoney, convertFromPKR, formatAmountInput, parseAmountInput,
+} from '../lib/currency.js'
 
 export default function SettingsPage() {
   const { settings, setSettings, addBank, updateBank, deleteBank, MAX_BANKS } = useApp()
@@ -290,11 +292,24 @@ export default function SettingsPage() {
 }
 
 function CategoryPartial({ icon: Icon, title, enabled, onToggle, value, onChange, onSave, disabled, inputId }) {
+  const [focused, setFocused] = useState(false)
+  // The threshold only means anything while this category is switched on, so the
+  // field and its Save button follow the toggle — not just the master switch.
+  const fieldsOff = disabled || !enabled
+
   return (
-    <div className="rounded-2xl border border-black/5 bg-parchment p-4">
+    <div
+      className={`rounded-2xl border p-4 transition-colors ${
+        fieldsOff ? 'border-black/5 bg-black/[0.03]' : 'border-black/5 bg-parchment'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
-        <p className="flex items-center gap-2 font-heading font-semibold text-pine">
-          <Icon className="h-4 w-4 text-brand-500" aria-hidden="true" />
+        <p
+          className={`flex items-center gap-2 font-heading font-semibold transition-opacity ${
+            fieldsOff ? 'text-pine/50' : 'text-pine'
+          }`}
+        >
+          <Icon className={`h-4 w-4 ${fieldsOff ? 'text-brand-500/50' : 'text-brand-500'}`} aria-hidden="true" />
           {title}
         </p>
         <button
@@ -307,21 +322,46 @@ function CategoryPartial({ icon: Icon, title, enabled, onToggle, value, onChange
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${enabled ? 'left-6' : 'left-1'}`} />
         </button>
       </div>
-      <label className="field-label mt-4" htmlFor={inputId}>Minimum value (PKR)</label>
+      <label
+        className={`field-label mt-4 ${fieldsOff ? 'opacity-50' : ''}`}
+        htmlFor={inputId}
+      >
+        Minimum value (PKR)
+      </label>
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/45">Rs</span>
+          <span
+            className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${
+              fieldsOff ? 'text-ink/25' : 'text-ink/45'
+            }`}
+          >
+            Rs
+          </span>
           <input
-            id={inputId} type="number" min="0" step="5000" value={value} disabled={disabled}
-            onChange={(e) => onChange(e.target.value)} className="field-input pl-9 disabled:opacity-60"
+            id={inputId}
+            type="text"
+            inputMode="decimal"
+            // Grouped while typing; decimals settle on blur so the field stays usable.
+            value={formatAmountInput(value, { withDecimals: !focused && value !== '' })}
+            disabled={fieldsOff}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onChange={(e) => onChange(parseAmountInput(e.target.value))}
+            className="field-input pl-9 disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
-        <button onClick={onSave} disabled={disabled} className="btn-outline btn-md shrink-0">
+        <button
+          onClick={onSave}
+          disabled={fieldsOff}
+          className="btn-outline btn-md shrink-0 transition-transform duration-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+        >
           Save
         </button>
       </div>
-      <p className="mt-2 text-xs text-ink/50">
-        Only {title.toLowerCase()} worth this much or more can be partially sponsored.
+      <p className={`mt-2 text-xs ${fieldsOff ? 'text-ink/35' : 'text-ink/50'}`}>
+        {enabled || disabled
+          ? `Only ${title.toLowerCase()} worth this much or more can be partially sponsored.`
+          : `Switch ${title.toLowerCase()} on to set its minimum.`}
       </p>
     </div>
   )

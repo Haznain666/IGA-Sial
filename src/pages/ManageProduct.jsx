@@ -12,6 +12,7 @@ import { useApp } from '../store/AppContext.jsx'
 import { useToast } from '../store/ToastContext.jsx'
 import { ANIMAL_TYPES, MAX_IMAGES, DETAILS_MAX } from '../data/constants.js'
 import { convertFromPKR, formatMoney } from '../lib/currency.js'
+import { formatCNIC, formatMobile } from '../lib/helpers.js'
 import { fileToScaledDataURL, normalizeImage, imageUrl, imageStyle } from '../lib/images.js'
 
 const TABS = [
@@ -444,10 +445,10 @@ function ProductEditor({ kind, product, collectOwnerInfo, fxRates, onClose, onSa
                   <input value={form.owner.lastName} onChange={(e) => { setOwner('lastName', e.target.value); if (errors.ownerLast) setErrors((er) => ({ ...er, ownerLast: undefined })) }} className={`field-input ${errors.ownerLast ? 'field-input-invalid' : ''}`} />
                 </FormField>
                 <FormField label="CNIC number">
-                  <input value={form.owner.cnic} onChange={(e) => setOwner('cnic', e.target.value)} placeholder="35202-1234567-8" className="field-input" />
+                  <input value={form.owner.cnic} inputMode="numeric" onChange={(e) => setOwner('cnic', formatCNIC(e.target.value))} placeholder="35202-1234567-8" className="field-input" />
                 </FormField>
-                <FormField label="Phone number">
-                  <input type="tel" value={form.owner.phone} onChange={(e) => setOwner('phone', e.target.value)} placeholder="+92 300 1234567" className="field-input" />
+                <FormField label="Mobile number">
+                  <input type="tel" inputMode="numeric" value={form.owner.phone} onChange={(e) => setOwner('phone', formatMobile(e.target.value))} placeholder="0300-123 4567" className="field-input" />
                 </FormField>
                 <FormField label="Email" className="sm:col-span-2">
                   <input type="email" value={form.owner.email} onChange={(e) => setOwner('email', e.target.value)} placeholder="name@example.com" className="field-input" />

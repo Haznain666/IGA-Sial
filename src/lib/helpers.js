@@ -54,3 +54,25 @@ export function isPhone(v) {
 export function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n))
 }
+
+// --- Pakistani identity / contact masks -------------------------------------
+// Both are applied as the user types, so stored values are always consistent.
+// These are deliberately Pakistan-specific and used ONLY for recipient families
+// and villager owners — never for sponsors, who are frequently overseas and
+// would be broken by a local phone mask.
+
+// CNIC → 12345-1234567-1 (5-7-1, 13 digits).
+export function formatCNIC(value) {
+  const d = String(value || '').replace(/\D/g, '').slice(0, 13)
+  if (d.length <= 5) return d
+  if (d.length <= 12) return `${d.slice(0, 5)}-${d.slice(5)}`
+  return `${d.slice(0, 5)}-${d.slice(5, 12)}-${d.slice(12)}`
+}
+
+// Mobile → 0300-123 4567 (4-3-4, 11 digits).
+export function formatMobile(value) {
+  const d = String(value || '').replace(/\D/g, '').slice(0, 11)
+  if (d.length <= 4) return d
+  if (d.length <= 7) return `${d.slice(0, 4)}-${d.slice(4)}`
+  return `${d.slice(0, 4)}-${d.slice(4, 7)} ${d.slice(7)}`
+}

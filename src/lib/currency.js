@@ -52,3 +52,27 @@ export function formatAllFromPKR(pkr, rates) {
     return acc
   }, {})
 }
+
+// Money typed into an admin field. Kept as text (not <input type="number">) so
+// thousands separators can be shown while typing; the caller stores the raw
+// numeric string. Decimals are settled on blur — formatting them mid-keystroke
+// makes the field impossible to type into.
+export function formatAmountInput(value, { withDecimals = false } = {}) {
+  const raw = String(value ?? '').replace(/[^\d.]/g, '')
+  if (raw === '') return ''
+  const [intPart, ...rest] = raw.split('.')
+  const decPart = rest.join('')
+  const grouped = (intPart || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  if (withDecimals) {
+    const n = Number(`${intPart || 0}.${decPart || 0}`)
+    return Number.isFinite(n)
+      ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : grouped
+  }
+  return raw.includes('.') ? `${grouped}.${decPart}` : grouped
+}
+
+// Inverse of the above — strip separators back to a plain numeric string.
+export function parseAmountInput(value) {
+  return String(value ?? '').replace(/,/g, '').replace(/[^\d.]/g, '')
+}

@@ -9,7 +9,7 @@ import Modal from '../components/Modal.jsx'
 import Pagination from '../components/Pagination.jsx'
 import { useApp } from '../store/AppContext.jsx'
 import { useToast } from '../store/ToastContext.jsx'
-import { fullName, formatDateTime } from '../lib/helpers.js'
+import { fullName, formatDateTime, formatCNIC, formatMobile } from '../lib/helpers.js'
 import { formatMoney } from '../lib/currency.js'
 import { imageUrl, imageStyle } from '../lib/images.js'
 
@@ -35,6 +35,18 @@ export default function ConfirmSponsorships() {
   const pending = useMemo(
     () => sponsorships.filter((s) => s.status === 'pending'),
     [sponsorships],
+  )
+
+  // Confirmed money on an item that is NOT yet fully sponsored used to vanish
+  // from Super Admin entirely: it left this page (no longer pending) but had not
+  // reached Sponsorships Made (which only lists fully sponsored items). Show it
+  // here as a read-only record so every confirmed contribution stays visible.
+  const confirmedInProgress = useMemo(
+    () =>
+      sponsorships.filter(
+        (s) => s.status === 'confirmed' && remainingOf(s.productId) > 0,
+      ),
+    [sponsorships, remainingOf],
   )
 
   const [page, setPage] = useState(1)
@@ -99,8 +111,11 @@ export default function ConfirmSponsorships() {
     }
   }
 
-  const setR = (key) => (ev) => {
-    setRecipient((r) => ({ ...r, [key]: ev.target.value }))
+  // `format` masks the value as it is typed (CNIC / mobile).
+  const setR = (key, format) => (ev) => {
+    const raw = ev.target.value
+    const next = format ? format(raw) : raw
+    setRecipient((r) => ({ ...r, [key]: next }))
     if (errors[key]) setErrors((er) => ({ ...er, [key]: undefined }))
   }
 
@@ -149,6 +164,28 @@ export default function ConfirmSponsorships() {
             <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </>
         )}
+
+        {confirmedInProgress.length > 0 && (
+          <section className="mt-12">
+            <h2 className="font-heading text-lg font-semibold text-pine">
+              Confirmed, still collecting
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm text-ink/55">
+              Money already received on items that are not yet fully sponsored. These move to
+              Sponsorships made once their full value is confirmed.
+            </p>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {confirmedInProgress.map((s) => (
+                <ConfirmationCard
+                  key={s.id}
+                  sponsorship={s}
+                  product={productById(s.productId)}
+                  remaining={remainingOf(s.productId)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       <Modal
@@ -184,9 +221,22 @@ export default function ConfirmSponsorships() {
             <RField label="First name" value={recipient.firstName} onChange={setR('firstName')} error={errors.firstName} required />
             <RField label="Last name" value={recipient.lastName} onChange={setR('lastName')} error={errors.lastName} required />
           </div>
-          <RField label="CNIC number" value={recipient.cnic} onChange={setR('cnic')} placeholder="35202-1234567-8" />
+          <RField
+            label="CNIC number"
+            value={recipient.cnic}
+            onChange={setR('cnic', formatCNIC)}
+            placeholder="35202-1234567-8"
+            inputMode="numeric"
+          />
           <div className="grid gap-4 sm:grid-cols-2">
-            <RField label="Phone number" type="tel" value={recipient.phone} onChange={setR('phone')} placeholder="+92 300 1234567" />
+            <RField
+              label="Mobile number"
+              type="tel"
+              value={recipient.phone}
+              onChange={setR('phone', formatMobile)}
+              placeholder="0300-123 4567"
+              inputMode="numeric"
+            />
             <RField label="Email" type="email" value={recipient.email} onChange={setR('email')} placeholder="name@example.com" />
           </div>
         </form>
@@ -292,24 +342,32 @@ function ConfirmationCard({ sponsorship: s, product, remaining, holdLabel, onCon
         )}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button onClick={onConfirm} className="btn-primary btn-sm">
-          <BadgeCheck className="h-4 w-4" aria-hidden="true" />
-          Confirm
-        </button>
-        <button
-          onClick={onCancel}
-          className="btn-sm btn border border-red-200 bg-white text-red-600 hover:bg-red-50 focus-visible:ring-red-400"
-        >
-          <XCircle className="h-4 w-4" aria-hidden="true" />
-          Cancel
-        </button>
-      </div>
+      {onConfirm ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button onClick={onConfirm} className="btn-primary btn-sm transition-transform duration-100 active:scale-95">
+            <BadgeCheck className="h-4 w-4" aria-hidden="true" />
+            Confirm
+          </button>
+          <button
+            onClick={onCancel}
+            className="btn-sm btn border border-red-200 bg-white text-red-600 transition-transform duration-100 hover:bg-red-50 focus-visible:ring-red-400 active:scale-95"
+          >
+            <XCircle className="h-4 w-4" aria-hidden="true" />
+            Cancel
+          </button>
+        </div>
+      ) : (
+        // Read-only record of money already confirmed on an unfinished item.
+        <p className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700">
+          <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Confirmed{s.confirmedAt ? ` ${formatDateTime(s.confirmedAt)}` : ''}
+        </p>
+      )}
     </article>
   )
 }
 
-function RField({ label, value, onChange, error, type = 'text', placeholder, required }) {
+function RField({ label, value, onChange, error, type = 'text', placeholder, required, inputMode }) {
   return (
     <div>
       <label className="field-label">
@@ -318,6 +376,7 @@ function RField({ label, value, onChange, error, type = 'text', placeholder, req
       </label>
       <input
         type={type}
+        inputMode={inputMode}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
