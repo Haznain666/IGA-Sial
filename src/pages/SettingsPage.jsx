@@ -348,17 +348,21 @@ function SettingCard({ icon: Icon, title, description, action, children }) {
 }
 
 function Toggle({ id, icon: Icon, checked, onChange, label, description }) {
+  // `htmlFor` does nothing here: a <button role="switch"> is not a labelable
+  // element, so the visible text has to be wired up with aria-labelledby or the
+  // switch reaches a screen reader with no accessible name at all.
   return (
     <div className="flex items-start justify-between gap-4 py-4">
       <div className="flex gap-3">
         {Icon && <Icon className="mt-0.5 h-5 w-5 shrink-0 text-brand-400" aria-hidden="true" />}
         <div>
-          <label htmlFor={id} className="font-medium text-ink">{label}</label>
-          <p className="mt-0.5 text-sm text-ink/55">{description}</p>
+          <span id={`${id}-label`} className="font-medium text-ink">{label}</span>
+          <p id={`${id}-desc`} className="mt-0.5 text-sm text-ink/55">{description}</p>
         </div>
       </div>
       <button
         id={id} type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
+        aria-labelledby={`${id}-label`} aria-describedby={`${id}-desc`}
         className={`relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${checked ? 'bg-brand-500' : 'bg-black/15'}`}
       >
         <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${checked ? 'left-6' : 'left-1'}`} />

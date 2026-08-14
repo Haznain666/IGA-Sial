@@ -318,15 +318,19 @@ export default function SponsorPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex gap-2">
                             <PiggyBank className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" aria-hidden="true" />
-                            <label htmlFor={`partial-${p.id}`} className="text-sm font-medium text-ink">
+                            <span id={`partial-${p.id}-label`} className="text-sm font-medium text-ink">
                               Partial sponsor
-                            </label>
+                            </span>
                           </div>
+                          {/* aria-labelledby, not htmlFor: a <button role="switch"> is not a
+                              labelable element, so a <label> would leave it unnamed. */}
                           <button
                             id={`partial-${p.id}`}
                             type="button"
                             role="switch"
                             aria-checked={entry.partial}
+                            aria-labelledby={`partial-${p.id}-label`}
+                            aria-describedby={`partial-${p.id}-desc`}
                             onClick={() =>
                               setPartial(p.id, {
                                 partial: !entry.partial,
@@ -344,7 +348,7 @@ export default function SponsorPage() {
                             />
                           </button>
                         </div>
-                        <p className="mt-1 text-xs leading-relaxed text-ink/55">
+                        <p id={`partial-${p.id}-desc`} className="mt-1 text-xs leading-relaxed text-ink/55">
                           Give any amount towards this item instead of its full value. Others can
                           sponsor the rest, and it is only gifted once the total is reached.
                         </p>
