@@ -1,4 +1,5 @@
 import { supabase } from './client.js'
+import { inviteClient } from './inviteClient.js'
 import { normalizeImages } from '../lib/images.js'
 import { DEFAULT_FX } from '../lib/currency.js'
 
@@ -123,6 +124,21 @@ export function friendlyError(error) {
 function unwrap({ data, error }) {
   if (error) throw new Error(friendlyError(error))
   return data
+}
+
+// True when the database simply doesn't have a function yet — i.e. migration
+// 0005 hasn't been applied. The panel degrades to its old behaviour instead of
+// breaking, so deploying the build before running the SQL is safe.
+function missingFunction(error) {
+  if (!error) return false
+  const code = String(error.code || '')
+  const msg = String(error.message || '')
+  return (
+    code === 'PGRST202' ||
+    code === '42883' ||
+    /Could not find the function/i.test(msg) ||
+    /function .* does not exist/i.test(msg)
+  )
 }
 
 // ---- reads ------------------------------------------------------------------
@@ -274,30 +290,77 @@ export async function updatePassword(password) {
 }
 
 // ---- admin users ------------------------------------------------------------
-export async function fetchAdmins() {
-  const data = unwrap(
-    await supabase.from('admin_profiles').select('*').order('created_at', { ascending: true }),
-  )
-  return (data || []).map((row) => ({
+function toAdmin(row) {
+  const lastSignInAt = row.last_sign_in_at || null
+  return {
     id: row.id,
     email: row.email,
     fullName: row.full_name || '',
     role: row.role || 'admin',
     active: !!row.active,
     createdAt: row.created_at || null,
-  }))
+    lastSignInAt,
+    emailConfirmedAt: row.email_confirmed_at || null,
+    // An invited admin is NOT yet an owner/admin in any meaningful sense —
+    // they hold no session and may never have opened the e-mail. The panel
+    // shows "Invited" until this flips. `null` = the database can't tell us
+    // (migration 0005 not applied), so the UI stays silent rather than lying.
+    pending: 'last_sign_in_at' in row ? !lastSignInAt : null,
+  }
 }
 
-// Invite by email. The magic link lands on /#/auth/callback, where the code is
-// exchanged and the new admin is sent to "Set your password".
+export async function fetchAdmins() {
+  const { data, error } = await supabase.rpc('admin_users_list')
+  if (!error) return (data || []).map(toAdmin)
+  if (!missingFunction(error)) throw new Error(friendlyError(error))
+
+  // Pre-0005 database: no sign-in information available.
+  const rows = unwrap(
+    await supabase.from('admin_profiles').select('*').order('created_at', { ascending: true }),
+  )
+  return (rows || []).map(toAdmin)
+}
+
+// Invite by e-mail.
+//
+// Two steps, and the order matters:
+//  1. `admin_invite_prepare` puts the address on the allow-list the signup
+//     trigger reads, and — if that person already exists in auth.users (a
+//     re-invite) — restores their admin_profiles row there and then. Without
+//     this, re-inviting a deleted address inserted nothing anywhere and the
+//     person never appeared in the list.
+//  2. The mail itself goes out through `inviteClient`, which uses the IMPLICIT
+//     flow. See src/supabase/inviteClient.js: a PKCE link can only be opened in
+//     the browser that sent it, which is never the invitee's phone.
 export async function inviteAdmin(email, fullName, role = 'admin') {
+  const address = String(email || '').trim()
+  const name = String(fullName || '').trim()
+  // Deliberately the same redirect target as before: it is already on the
+  // project's redirect allow-list. Under the implicit flow Supabase overwrites
+  // the fragment with the session anyway, so the link comes back as
+  // `…/#access_token=…`; authRedirect.js handles both shapes.
   const redirectTo = `${window.location.origin}${window.location.pathname}#/auth/callback`
-  return unwrap(
-    await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo, data: { full_name: fullName || '', role } },
+
+  let prepared = { existing: false }
+  const { data, error } = await supabase.rpc('admin_invite_prepare', {
+    p_email: address,
+    p_full_name: name,
+    p_role: role,
+  })
+  if (error && !missingFunction(error)) throw new Error(friendlyError(error))
+  if (!error && data) prepared = data
+
+  unwrap(
+    await inviteClient.auth.signInWithOtp({
+      email: address,
+      options: {
+        emailRedirectTo: redirectTo,
+        shouldCreateUser: true,
+        data: { full_name: name, role },
+      },
     }),
   )
+  return prepared
 }
 
 export async function updateAdmin(id, patch) {
@@ -312,6 +375,29 @@ export async function updateAdmin(id, patch) {
   return { id: data.id, email: data.email, fullName: data.full_name || '', role: data.role, active: !!data.active }
 }
 
+// Remove an admin for real: `admin_user_delete` deletes the auth.users row,
+// which cascades to admin_profiles, their identities and their live sessions.
+// Deleting only the profile row (what this used to do) left the account alive
+// in Supabase and blocked any future re-invite.
+//
+// Returns { hardDeleted } so the UI can be honest when it is talking to a
+// database where migration 0005 hasn't been applied yet.
 export async function deleteAdmin(id) {
+  const { error } = await supabase.rpc('admin_user_delete', { p_id: id })
+  if (!error) return { hardDeleted: true }
+  if (!missingFunction(error)) throw new Error(friendlyError(error))
+
   unwrap(await supabase.from('admin_profiles').delete().eq('id', id))
+  return { hardDeleted: false }
+}
+
+// Is the signed-in user an ACTIVE admin? `null` means the database predates
+// migration 0005 and can't answer — callers treat that as "don't block".
+export async function checkActiveAdmin() {
+  const { data, error } = await supabase.rpc('is_active_admin')
+  if (error) {
+    if (missingFunction(error)) return null
+    return null
+  }
+  return !!data
 }
