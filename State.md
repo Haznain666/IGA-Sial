@@ -1,7 +1,30 @@
 # IGA Sial Farm — Project State & Context
 
 > Handoff/context doc. Read this first when opening `D:\iga-sial-farm` in a new session.
-> Last updated: 2026-08-14 (Supabase migration + sponsorship ledger + partial payments + admin auth).
+> Last updated: 2026-08-16 (admin user lifecycle: device-independent invites, hard delete, Invited status).
+
+---
+
+## 0. ⚠️ PENDING MANUAL STEP — apply migrations 0005 and 0006
+
+`supabase/migrations/0005_admin_users.sql` and `0006_admin_rls.sql` are **written but not yet
+applied**. Paste them into the Supabase SQL editor **in order** (0005 first — 0006 depends on
+`public.is_active_admin()` which 0005 creates).
+
+The shipped build works either way: every new RPC is called with a fallback to the old behaviour, so
+nothing breaks while the SQL is outstanding. But **until 0005 is applied**:
+
+- deleting an admin still only removes their `admin_profiles` row (the panel now says so out loud in
+  the toast instead of claiming success),
+- the **Invited** status can't be shown (the panel needs `auth.users.last_sign_in_at`),
+- re-inviting a previously deleted address still won't restore their row.
+
+Verify after applying:
+
+```sql
+select public.is_active_admin();                 -- must be true for your own account
+select * from public.admin_users_list();         -- roster incl. last_sign_in_at
+```
 
 ---
 
@@ -81,8 +104,11 @@ product cards, partial payments, pagination, slim confirmation cards, Supabase A
   `supabase_realtime` publication.
 - `0004_auto_release.sql` **applied** — auto-release now runs **server-side hourly via pg_cron**
   (`release-expired-sponsorships`, `0 * * * *`), not in the browser. See Gotchas for why.
-- **Email templates configured**: reset-password emits the 6-digit `{{ .Token }}`; the invite link uses
-  `{{ .TokenHash }}` so an invite opened on a different device still works.
+- **Email templates configured**: reset-password emits the 6-digit `{{ .Token }}`. The **Invite user**
+  template was set to `{{ .TokenHash }}` — but note the panel never called Supabase's invite endpoint,
+  it called `signInWithOtp`, which sends the **Magic Link** template. That template still carried
+  `{{ .ConfirmationURL }}`, which is where the `?code=` in the 2026-08-16 bug report came from. The
+  invite path no longer depends on either template (see "Admin user lifecycle" below).
 - The stray QA test sponsorship has been **deleted**; the ledger is empty and all 9 products are
   `available`.
 
@@ -167,6 +193,58 @@ Verified on the live deploy — all six switches announce correctly:
 Manage Products", "Enable partial payments", "Partial payments for Live Stock / Equipment", and the
 sponsor page's "Partial sponsor".
 **Don't reintroduce it:** never use `<label htmlFor>` on a switch built from a `<button>`.
+
+### Admin user lifecycle — rebuilt 2026-08-16
+
+Four defects, one root cause each. All four are fixed; the last three need migration 0005 applied.
+
+**1. "PKCE code verifier not found in storage" when opening an invite on a phone.**
+`inviteAdmin` used `signInWithOtp` on the main client, which runs the **PKCE** flow. PKCE writes a
+`code_verifier` into the localStorage of the browser that STARTS the flow — the admin's laptop — and
+mails a link carrying only `?code=`. Redeeming it requires that verifier, which the invitee's phone
+never has. So the invite could only ever be opened on the sending admin's own browser: a 100%
+failure, not an intermittent one.
+
+Fixed by sending invites through **`src/supabase/inviteClient.js`**, a second Supabase client whose
+only difference is `flowType: 'implicit'` (plus `persistSession: false` and its own `storageKey`, so
+it can never touch the signed-in admin's session). No verifier is involved; the link comes back
+carrying the session in the URL fragment, redeemable on any device.
+
+**`src/supabase/authRedirect.js`** picks that up. It runs in `main.jsx` **before the router mounts**,
+because Supabase overwrites the fragment of the redirect target — `…/#/auth/callback` comes back as
+`…/#access_token=…` and HashRouter would render Not Found over a perfectly good invite. It handles
+all four shapes that can arrive (implicit tokens, `token_hash`, a stray `?code=`, and an
+`error_code=otp_expired` payload), scrubs the credential out of the address bar with `replaceState`,
+then hands off to a real route. A `hashchange` listener covers the case where the link is clicked
+while the site is already open in that tab (fragment changes, no reload, boot pass never runs).
+**Don't move `consumeAuthRedirect()` after `createRoot`** — the ordering is the whole point.
+
+`AuthCallback` is now the handler for the leftovers rather than the main path, and translates
+Supabase's developer-facing errors into sentences an admin can act on.
+
+**2. Deleting an admin didn't delete anything in Supabase.** `deleteAdmin` removed the
+`admin_profiles` row only; the `auth.users` row lived on with its sessions. `admin_user_delete()`
+(0005) deletes the auth user, which cascades to the profile, identities and sessions.
+
+**3. Re-inviting a deleted address did nothing visible.** Because the auth user still existed, no
+INSERT fired on `auth.users`, so `on_auth_user_created` never re-created the profile — the person
+was invited into a void. Two fixes: deletes are now real (#2), and `admin_invite_prepare()` restores
+the profile directly when the address already exists in `auth.users`.
+
+**4. An invited admin displayed their role before ever signing in.** The panel showed "owner"
+the moment the invite went out, which read as "this person is now Super Admin" — exactly wrong while
+their link was failing. `admin_users_list()` returns `auth.users.last_sign_in_at`, and anyone
+without one renders as **Invited**, with a "Resend invite" button, and the line "they become
+&lt;role&gt; once they sign in for the first time".
+
+**Security, closed on the way past (0005/0006).** The old signup trigger gave an `admin_profiles`
+row to *every* new auth user, and every write policy read `auth.role() = 'authenticated'` — so any
+signed-in Supabase user could write products, sponsorships and settings, and "Deactivate" was purely
+cosmetic. Admin profiles are now created only for e-mails on the `admin_invites` allow-list, with
+the role taken **from the allow-list, never from `user_metadata`** (which a user can set on
+themselves), and every write policy is `to authenticated using (public.is_active_admin())`.
+`SuperAdminLayout` asks the database on each session change instead of trusting the JWT, so a
+deactivated or deleted admin loses the panel immediately rather than at token expiry.
 
 **Open items:**
 - ✅ **Auth is live.** SMTP runs through Resend (`smtp.resend.com:465`, user `resend`, sender
@@ -348,7 +426,7 @@ src/
     ManageProduct, ConfirmSponsorships, SponsorshipsMade, SettingsPage, AdminUsers,
     auth/AdminAuth, auth/AuthCallback, auth/SetPassword,
     superadmin/SuperAdminLayout, superadmin/Dashboard
-supabase/migrations/            # 0001_init.sql, 0002_seed.sql, 0003_realtime.sql
+supabase/migrations/            # 0001_init … 0004_auto_release, 0005_admin_users, 0006_admin_rls
 public/
   logo.jpg, img/hero-mosque.png, img/aerial.png, img/masterplan.png, img/logo-seal.jpg
 ```
@@ -382,9 +460,17 @@ public/
 - **`detectSessionInUrl` must stay off.** HashRouter would consume the fragment. `/auth/callback`
   reads the credential from both `location.search` and the hash query, and its effect is guarded by a
   ref because StrictMode double-invokes and a code can only be redeemed once.
-- **PKCE `code` only works in the browser that started the flow.** An invite opened on another device
-  has no `code_verifier`. `AuthCallback` therefore prefers `token_hash` + `verifyOtp()` and falls back
-  to `exchangeCodeForSession()` — so the **invite email template should use `{{ .TokenHash }}`**.
+- **PKCE `code` only works in the browser that started the flow.** This is why invites go out through
+  the implicit-flow `inviteClient` and never through the main (PKCE) client. **Do not "tidy up" that
+  second client away** — collapsing it back onto `supabase` re-breaks every invite opened on a phone.
+  `AuthCallback` still prefers `token_hash` + `verifyOtp()` over `exchangeCodeForSession()` so old
+  links and `{{ .TokenHash }}` templates keep working.
+- **`consumeAuthRedirect()` must run before `createRoot`** (`src/main.jsx`). Supabase replaces the
+  fragment of the redirect URL, so the auth payload and the HashRouter route occupy the same slot;
+  the payload has to be read and the URL rewritten to a route before the router looks at it.
+- **Never take an admin's role from `user_metadata`.** The invitee can set their own metadata, so it
+  is an escalation path. The role comes from the `admin_invites` allow-list row written by an
+  existing admin.
 - **Settings arrive after mount.** Anything that seeds local state from `settings` must reconcile in an
   effect. `SponsorPage` does this for the bank dropdown default — without it the visible first option
   and the submitted `bankId` disagreed (a real bug caught in browser QA).

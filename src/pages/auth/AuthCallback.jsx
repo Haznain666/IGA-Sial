@@ -3,9 +3,14 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 import { exchangeCode, verifyTokenHash } from '../../supabase/api.js'
 
-// HashRouter swallows the URL fragment, so `detectSessionInUrl` is off and the
-// invite / recovery credential is redeemed here by hand. It can arrive either
-// before the hash (?code=… on the real query string) or inside the hash route.
+// Most invite links never reach this page any more: they carry their session in
+// the URL fragment and are redeemed at boot by src/supabase/authRedirect.js,
+// which lands the invitee straight on /set-password.
+//
+// This page is the handler for everything else — an e-mail template that emits
+// {{ .TokenHash }}, an older `?code=` link still sitting in someone's inbox, or
+// a link that has expired — and for turning any of those failures into a
+// sentence a person can act on.
 function readParams() {
   const merged = new URLSearchParams(window.location.search)
   const hash = window.location.hash || ''
@@ -19,7 +24,26 @@ function readParams() {
     code: merged.get('code'),
     tokenHash: merged.get('token_hash') || merged.get('token'),
     type: merged.get('type') || 'invite',
+    error: merged.get('error_description') || merged.get('error'),
   }
+}
+
+// Supabase's raw messages are written for developers. Admins get these instead.
+function explain(raw) {
+  const msg = String(raw || '')
+  if (/code verifier/i.test(msg)) {
+    return 'This link was created for a different browser, so it can’t be opened here. Ask an admin to send you a fresh invitation from the Admin Users page — the new link will work on this device.'
+  }
+  if (/expired/i.test(msg)) {
+    return 'This link has expired. Invitation links are valid for a limited time — ask an admin to send you a new one.'
+  }
+  if (/jwt|base64|malformed|parse/i.test(msg)) {
+    return 'This link is damaged — some email apps break long links across lines. Copy the whole link into your browser’s address bar, or ask an admin for a new invitation.'
+  }
+  if (/already|used|invalid|not found/i.test(msg)) {
+    return 'This link has already been used or is no longer valid. If you have already set a password, sign in below; otherwise ask an admin for a new invitation.'
+  }
+  return msg || 'We couldn’t verify that link. Ask an admin to send you a new invitation.'
 }
 
 export default function AuthCallback() {
@@ -32,9 +56,13 @@ export default function AuthCallback() {
     if (ran.current) return
     ran.current = true
 
-    const { code, tokenHash, type } = readParams()
+    const { code, tokenHash, type, error: linkError } = readParams()
+    if (linkError) {
+      setError(explain(linkError))
+      return
+    }
     if (!code && !tokenHash) {
-      setError('This link is missing its verification code. Please open the most recent email, or ask for a new invite.')
+      setError('This link is missing its verification code. Please open the most recent email, or ask an admin for a new invitation.')
       return
     }
     // token_hash works from any browser; `code` only from the one that started
@@ -42,7 +70,7 @@ export default function AuthCallback() {
     const redeem = tokenHash ? verifyTokenHash(tokenHash, type) : exchangeCode(code)
     redeem
       .then(() => navigate('/set-password', { replace: true }))
-      .catch((e) => setError(e.message || 'This link has expired or has already been used.'))
+      .catch((e) => setError(explain(e.message)))
   }, [navigate])
 
   return (

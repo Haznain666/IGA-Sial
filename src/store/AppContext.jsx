@@ -51,7 +51,10 @@ function reducer(state, action) {
     case 'SET_SETTINGS':
       return { ...state, settings: action.settings }
     case 'SET_SESSION':
-      return { ...state, session: action.session, authLoading: false }
+      // A new session invalidates what we knew about admin rights.
+      return { ...state, session: action.session, authLoading: false, isAdmin: null }
+    case 'SET_IS_ADMIN':
+      return { ...state, isAdmin: action.isAdmin }
 
     // ---- cart (always per-browser) ----
     case 'CART_TOGGLE': {
@@ -105,6 +108,9 @@ export function AppProvider({ children }) {
     loading: true,
     session: null,
     authLoading: true,
+    // true / false once checked; null = unknown (no session, or a database
+    // that predates migration 0005 and can't answer).
+    isAdmin: null,
   }))
   const stateRef = useRef(state)
   stateRef.current = state
@@ -153,6 +159,21 @@ export function AppProvider({ children }) {
     getSession().then((session) => dispatch({ type: 'SET_SESSION', session }))
     return onAuthChange((session) => dispatch({ type: 'SET_SESSION', session }))
   }, [])
+
+  // Holding a Supabase session is not the same as being an admin. Someone who
+  // was deactivated or deleted keeps their JWT until it expires, so the panel
+  // asks the database on every session change instead of trusting the token.
+  const userId = state.session?.user?.id || null
+  useEffect(() => {
+    if (!userId) return undefined
+    let cancelled = false
+    api.checkActiveAdmin().then((isAdmin) => {
+      if (!cancelled) dispatch({ type: 'SET_IS_ADMIN', isAdmin })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
 
   // Cart persists locally — it's a donor's in-progress selection.
   useEffect(() => {

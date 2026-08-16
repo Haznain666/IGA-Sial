@@ -1,3 +1,51 @@
+# Release Notes — v2.1 "Admin accounts"
+
+**IGA Sial Farm** · 16 August 2026 · live at **https://igasial.codexmill.com**
+
+A focused release on one thing: admin accounts. Invitations now work on any phone or computer,
+removing an admin actually removes them, and someone who has been invited is shown as **Invited**
+until the day they first sign in.
+
+> **One manual step:** apply `supabase/migrations/0005_admin_users.sql` and then
+> `0006_admin_rls.sql` in the Supabase SQL editor. The site works before you do — it just can't
+> hard-delete accounts or show the Invited status until then.
+
+---
+
+## What changed
+
+**Invitation links work on any device.**
+Opening an invite on a phone failed every time with *"PKCE code verifier not found in storage"*.
+The link was tied to the browser it was sent from, so only the admin who sent it could open it —
+which is nobody's actual phone. Invitations no longer work that way: the link now opens on any
+device, in any browser, first time.
+
+**Links that genuinely can't work now say why.**
+Expired, already-used and damaged links each get a plain-English explanation and a next step,
+instead of a developer error message.
+
+**Removing an admin removes them from Supabase.**
+Previously it only took away their panel profile; the underlying login stayed alive. Deleting now
+removes the account, ends any session they have open, and frees the email address to be invited
+again later.
+
+**Re-inviting someone you removed works.**
+Inviting an address that had been deleted used to silently do nothing — no entry appeared in the
+list. That's fixed, including for accounts left behind by the old behaviour.
+
+**"Invited" is now a status.**
+An invited teammate showed their role — Owner or Admin — from the moment the invite was sent, even
+though they had never signed in and, in some cases, couldn't. They now read as **Invited**, with the
+date the invitation went out, a note that they become their role on first sign-in, and a **Resend
+invite** button. The role appears once they've actually signed in.
+
+**Deactivating an admin now means something.**
+Deactivate and Delete previously left the person able to keep working until their session expired.
+Access is now checked against the database, so it ends immediately. Signing up to Supabase no longer
+grants panel access on its own — only invited addresses become admins.
+
+---
+
 # Release Notes — v2.0 "Sponsorship"
 
 **IGA Sial Farm** · released 15 August 2026 · live at **https://igasial.codexmill.com**

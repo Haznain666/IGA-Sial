@@ -17,7 +17,7 @@ const NAV = [
 ]
 
 export default function SuperAdminLayout() {
-  const { session, authLoading, sponsorships, signOut } = useApp()
+  const { session, authLoading, isAdmin, sponsorships, signOut } = useApp()
   const { toast } = useToast()
 
   if (authLoading) {
@@ -30,6 +30,34 @@ export default function SuperAdminLayout() {
 
   // Every /super-admin route is behind this gate.
   if (!session) return <AdminAuth />
+
+  // Signed in, but no active admin profile — deactivated, deleted, or a
+  // Supabase user who was never an admin at all. `null` means the database
+  // couldn't answer, and we don't lock anyone out on a maybe.
+  if (isAdmin === false) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-sand px-5">
+        <div className="card w-full max-w-md p-6 text-center sm:p-8">
+          <h1 className="font-heading text-xl font-semibold text-pine">No admin access</h1>
+          <p className="mt-2 text-sm text-ink/60">
+            You are signed in as <span className="font-medium text-ink">{session.user?.email}</span>,
+            but this account doesn’t have access to the control panel. Ask an existing admin to
+            invite you.
+          </p>
+          <button
+            onClick={async () => {
+              await signOut()
+              toast('Signed out.', { type: 'info' })
+            }}
+            className="btn-primary btn-md mt-6"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            Sign out
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const pendingCount = sponsorships.filter((s) => s.status === 'pending').length
 

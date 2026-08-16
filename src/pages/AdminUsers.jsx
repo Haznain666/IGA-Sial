@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   UserPlus, Pencil, Trash2, Mail, ShieldCheck, Users, AlertTriangle, CheckCircle2, CircleSlash,
+  Send, MailQuestion,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
@@ -20,6 +21,7 @@ export default function AdminUsers() {
   const [invite, setInvite] = useState(false)
   const [editing, setEditing] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [resending, setResending] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -38,13 +40,34 @@ export default function AdminUsers() {
   const doDelete = async () => {
     if (!confirmDelete) return
     try {
-      await deleteAdmin(confirmDelete.id)
-      toast(`${confirmDelete.email} was removed.`, { type: 'info' })
+      const { hardDeleted } = await deleteAdmin(confirmDelete.id)
+      if (hardDeleted) {
+        toast(`${confirmDelete.email} was deleted from Supabase.`, { type: 'info' })
+      } else {
+        // Migration 0005 not applied: say so rather than implying it's gone.
+        toast(
+          `${confirmDelete.email} lost panel access, but their Supabase login still exists. Apply migration 0005 to delete accounts fully.`,
+          { type: 'error', duration: 9000 },
+        )
+      }
       await load()
     } catch (e) {
       toast(e.message, { type: 'error', duration: 6000 })
     }
     setConfirmDelete(null)
+  }
+
+  // An invited admin who never opened their e-mail can be sent another link.
+  const doResend = async (admin) => {
+    setResending(admin.id)
+    try {
+      await inviteAdmin(admin.email, admin.fullName, admin.role)
+      toast(`A fresh invitation is on its way to ${admin.email}.`, { duration: 6000 })
+    } catch (e) {
+      toast(e.message, { type: 'error', duration: 6000 })
+    } finally {
+      setResending('')
+    }
   }
 
   const toggleActive = async (admin) => {
@@ -95,19 +118,38 @@ export default function AdminUsers() {
           <ul className="space-y-3">
             {admins.map((a) => {
               const isMe = a.id === session?.user?.id
+              // `pending === null` means the database can't tell us yet
+              // (migration 0005), so we say nothing rather than guess.
+              const invited = a.pending === true && a.active
               return (
                 <li
                   key={a.id}
                   className="card flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                      <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+                    <span
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+                        invited ? 'bg-gold-100 text-gold-800' : 'bg-brand-50 text-brand-600'
+                      }`}
+                    >
+                      {invited
+                        ? <MailQuestion className="h-5 w-5" aria-hidden="true" />
+                        : <ShieldCheck className="h-5 w-5" aria-hidden="true" />}
                     </span>
                     <div className="min-w-0">
                       <p className="flex flex-wrap items-center gap-2 font-heading font-semibold text-pine">
                         <span className="truncate">{a.fullName || a.email}</span>
-                        <span className="chip bg-brand-50 text-[11px] capitalize text-brand-700">{a.role}</span>
+                        {/* Someone who has never signed in is not an admin yet —
+                            they are an outstanding invitation. Showing their
+                            role here read as "this person is now Super Admin",
+                            which was wrong and confusing. */}
+                        {invited ? (
+                          <span className="chip bg-gold-100 text-[11px] font-semibold text-gold-800">
+                            Invited
+                          </span>
+                        ) : (
+                          <span className="chip bg-brand-50 text-[11px] capitalize text-brand-700">{a.role}</span>
+                        )}
                         {isMe && <span className="chip bg-gold-100 text-[11px] text-gold-800">You</span>}
                         {!a.active && (
                           <span className="chip bg-red-50 text-[11px] text-red-600">Deactivated</span>
@@ -117,13 +159,32 @@ export default function AdminUsers() {
                         <Mail className="h-3.5 w-3.5 shrink-0 text-brand-400" aria-hidden="true" />
                         {a.email}
                       </p>
-                      {a.createdAt && (
-                        <p className="mt-0.5 text-xs text-ink/40">Added {formatDate(a.createdAt)}</p>
+                      {invited ? (
+                        <p className="mt-0.5 text-xs text-gold-800">
+                          Invitation sent{a.createdAt ? ` ${formatDate(a.createdAt)}` : ''} — they become{' '}
+                          <span className="capitalize">{a.role}</span> once they sign in for the first time.
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-xs text-ink/40">
+                          {a.lastSignInAt
+                            ? `Last signed in ${formatDate(a.lastSignInAt)}`
+                            : a.createdAt ? `Added ${formatDate(a.createdAt)}` : ''}
+                        </p>
                       )}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+                    {invited && (
+                      <button
+                        onClick={() => doResend(a)}
+                        disabled={resending === a.id}
+                        className="btn-outline btn-sm"
+                      >
+                        <Send className="h-4 w-4" aria-hidden="true" />
+                        {resending === a.id ? 'Sending…' : 'Resend invite'}
+                      </button>
+                    )}
                     <button onClick={() => setEditing(a)} className="btn-outline btn-sm">
                       <Pencil className="h-4 w-4" aria-hidden="true" />
                       Edit
@@ -164,15 +225,23 @@ export default function AdminUsers() {
 
         <p className="mt-6 rounded-2xl bg-parchment px-4 py-3 text-sm text-ink/60">
           Invited users receive an email with a link that brings them here to set their own password.
-          Removing someone deletes their admin profile and their access to this panel.
+          The link works on any phone, tablet or computer — not only the device the invite was sent
+          from. Someone stays <span className="font-medium text-ink">Invited</span> until they sign in
+          for the first time. Removing an admin deletes their account from Supabase entirely, so the
+          same email address can be invited again later.
         </p>
       </div>
 
       {invite && (
         <InviteModal
           onClose={() => setInvite(false)}
-          onDone={async (email) => {
-            toast(`Invitation sent to ${email}.`, { duration: 6000 })
+          onDone={async (email, result) => {
+            toast(
+              result?.existing
+                ? `${email} already had an account — their admin access is restored and a sign-in link is on its way.`
+                : `Invitation sent to ${email}.`,
+              { duration: 6000 },
+            )
             setInvite(false)
             await load()
           }}
@@ -214,8 +283,10 @@ export default function AdminUsers() {
             <AlertTriangle className="h-5 w-5" />
           </span>
           <p className="text-ink/75">
-            Remove <span className="font-semibold text-ink">{confirmDelete?.email}</span> from the
-            Super Admin panel? They will lose access immediately.
+            Delete <span className="font-semibold text-ink">{confirmDelete?.email}</span>? Their
+            Supabase account is removed along with their profile, any active session ends
+            immediately, and this cannot be undone. You can invite the same email address again
+            afterwards.
           </p>
         </div>
       </Modal>
@@ -240,8 +311,8 @@ function InviteModal({ onClose, onDone }) {
     setError('')
     setBusy(true)
     try {
-      await inviteAdmin(email.trim(), fullName.trim(), role)
-      await onDone(email.trim())
+      const result = await inviteAdmin(email.trim(), fullName.trim(), role)
+      await onDone(email.trim(), result)
     } catch (e) {
       toast(e.message, { type: 'error', duration: 6000 })
     } finally {
