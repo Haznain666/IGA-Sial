@@ -199,7 +199,7 @@ function FeaturedEquipment({ item, onOpenLightbox }) {
 
         <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <CurrencyPills valuePKR={item.valuePKR} size="lg" />
-          <Link to="/select" className="btn-gold btn-lg w-full sm:w-auto">
+          <Link to={`/select?preselect=${item.id}`} className="btn-gold btn-lg w-full sm:w-auto">
             <Heart className="h-5 w-5" aria-hidden="true" />
             Sponsor now
           </Link>
