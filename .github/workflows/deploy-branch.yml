@@ -1,0 +1,55 @@
+# Publishes the BUILT site to the `deploy` branch, for hosts that clone a repo
+# but do not run a build step (Hostinger's Git integration works this way).
+#
+# `main`   = source of truth (source code, never served directly)
+# `deploy` = build output only, safe to point public_html at
+#
+# Note there is no BASE_PATH here: Hostinger serves from the domain root, so the
+# build must use base "/". (The GitHub Pages workflow sets BASE_PATH=/IGA-Sial/
+# because Pages serves from a subpath — don't copy that here.)
+name: Publish deploy branch
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-branch
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+
+      # HashRouter keeps every route under /#/, so no rewrite rules are needed.
+      # This only covers someone hitting an unknown path directly.
+      - run: cp dist/index.html dist/404.html
+
+      - name: Push dist/ to the deploy branch
+        run: |
+          cd dist
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "build: ${GITHUB_SHA::7}"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:deploy
