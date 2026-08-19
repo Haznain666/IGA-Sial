@@ -233,6 +233,20 @@ export async function setSponsorshipStatus(id, status) {
   return toSponsorship(data)
 }
 
+// Update sponsorship fields (donor, recipient, bank_id, etc.)
+export async function updateSponsorship(id, patch) {
+  const row = {}
+  if (patch.donor !== undefined) row.donor = patch.donor
+  if (patch.recipient !== undefined) row.recipient = patch.recipient
+  if (patch.bankId !== undefined) row.bank_id = patch.bankId
+  if (patch.amountPKR !== undefined) row.amount_pkr = patch.amountPKR
+  // allow updating other small fields if needed
+  const data = unwrap(
+    await supabase.from('sponsorships').update(row).eq('id', id).select().single(),
+  )
+  return toSponsorship(data)
+}
+
 // ---- settings ---------------------------------------------------------------
 export async function saveSettings(patch) {
   const row = fromSettings(patch)

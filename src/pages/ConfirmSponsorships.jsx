@@ -29,7 +29,7 @@ export default function ConfirmSponsorships() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const {
-    sponsorships, settings, productById, remainingOf, confirmSponsorship, cancelSponsorship, loading,
+    sponsorships, settings, productById, remainingOf, confirmSponsorship, cancelSponsorship, updateSponsorship, loading,
   } = useApp()
 
   const pending = useMemo(
@@ -56,6 +56,9 @@ export default function ConfirmSponsorships() {
   const [confirmingId, setConfirmingId] = useState(null)
   const [cancellingId, setCancellingId] = useState(null)
   const [recipientBusy, setRecipientBusy] = useState(false)
+  const [editModal, setEditModal] = useState({ open: false, sponsorship: null })
+  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '', phone: '' })
+  const [editBusy, setEditBusy] = useState(false)
 
   const totalPages = Math.max(1, Math.ceil(pending.length / PER_PAGE))
   useEffect(() => {
@@ -203,6 +206,15 @@ export default function ConfirmSponsorships() {
                   holdLabel={daysLeftLabel(s.reservedAt, settings.reservationDays)}
                   onConfirm={() => startConfirm(s)}
                   onCancel={() => cancel(s, productById(s.productId))}
+                onEdit={() => {
+                  setEditForm({
+                    firstName: s.donor?.firstName || '',
+                    lastName: s.donor?.lastName || '',
+                    email: s.donor?.email || '',
+                    phone: s.donor?.phone || '',
+                  })
+                  setEditModal({ open: true, sponsorship: s })
+                }}
                 confirming={confirmingId === s.id}
                 cancelling={cancellingId === s.id}
               />
@@ -228,6 +240,15 @@ export default function ConfirmSponsorships() {
                   sponsorship={s}
                   product={productById(s.productId)}
                   remaining={remainingOf(s.productId)}
+                  onEdit={() => {
+                    setEditForm({
+                      firstName: s.donor?.firstName || '',
+                      lastName: s.donor?.lastName || '',
+                      email: s.donor?.email || '',
+                      phone: s.donor?.phone || '',
+                    })
+                    setEditModal({ open: true, sponsorship: s })
+                  }}
                 />
               ))}
             </div>
@@ -289,13 +310,56 @@ export default function ConfirmSponsorships() {
           </div>
         </form>
       </Modal>
+
+      {/* Edit donor modal */}
+      <Modal
+        open={editModal.open}
+        onClose={() => setEditModal({ open: false, sponsorship: null })}
+        title="Edit sponsorship donor"
+        description={editModal.sponsorship ? `Edit donor for ${productById(editModal.sponsorship.productId)?.name || ''}` : ''}
+        footer={
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setEditModal({ open: false, sponsorship: null })} className="btn-ghost btn-md" disabled={editBusy}>Cancel</button>
+            <button type="submit" form="edit-donor-form" className="btn-primary btn-md" disabled={editBusy}>{editBusy ? 'Saving…' : 'Save'}</button>
+          </div>
+        }
+      >
+        <form id="edit-donor-form" onSubmit={async (ev) => {
+          ev.preventDefault()
+          if (editBusy) return
+          const e = {}
+          if (!editForm.firstName.trim()) e.firstName = 'First name is required.'
+          if (!editForm.lastName.trim()) e.lastName = 'Last name is required.'
+          setErrors(e)
+          if (Object.keys(e).length) return
+          setEditBusy(true)
+          try {
+            await updateSponsorship(editModal.sponsorship.id, { donor: {
+              firstName: editForm.firstName.trim(), lastName: editForm.lastName.trim(), email: editForm.email.trim(), phone: editForm.phone.trim()
+            } })
+            toast('Donor updated.')
+            setEditModal({ open: false, sponsorship: null })
+          } catch (err) {
+            toast(err.message, { type: 'error', duration: 6000 })
+          } finally {
+            setEditBusy(false)
+          }
+        }} noValidate className="grid gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <RField label="First name" value={editForm.firstName} onChange={(v) => setEditForm((f) => ({ ...f, firstName: v }))} error={errors.firstName} required />
+            <RField label="Last name" value={editForm.lastName} onChange={(v) => setEditForm((f) => ({ ...f, lastName: v }))} error={errors.lastName} required />
+          </div>
+          <RField label="Mobile number" type="tel" value={editForm.phone} onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))} />
+          <RField label="Email" type="email" value={editForm.email} onChange={(v) => setEditForm((f) => ({ ...f, email: v }))} />
+        </form>
+      </Modal>
     </>
   )
 }
 
 // Deliberately compact: no hero image and no lightbox — just thumbnails that
 // magnify on hover, so a long queue stays scannable.
-function ConfirmationCard({ sponsorship: s, product, remaining, holdLabel, onConfirm, onCancel, confirming = false, cancelling = false }) {
+function ConfirmationCard({ sponsorship: s, product, remaining, holdLabel, onConfirm, onCancel, onEdit, confirming = false, cancelling = false }) {
   const [preview, setPreview] = useState(null)
   const images = product?.images || []
   const isEquipment = product?.kind === 'equipment'
@@ -391,23 +455,33 @@ function ConfirmationCard({ sponsorship: s, product, remaining, holdLabel, onCon
       </div>
 
       {onConfirm ? (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-      <button
-        onClick={onConfirm}
-        className="btn-primary btn-sm transition-transform duration-100 active:scale-95"
-        disabled={confirming}
-      >
-        <BadgeCheck className="h-4 w-4" aria-hidden="true" />
-        {confirming ? 'Confirming…' : 'Confirm'}
-      </button>
-      <button
-        onClick={onCancel}
-        className="btn-sm btn border border-red-200 bg-white text-red-600 transition-transform duration-100 hover:bg-red-50 focus-visible:ring-red-400 active:scale-95"
-        disabled={cancelling}
-      >
-        <XCircle className="h-4 w-4" aria-hidden="true" />
-        {cancelling ? 'Cancelling…' : 'Cancel'}
-      </button>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="btn-sm btn-ghost transition-transform duration-100 active:scale-95"
+              disabled={confirming || cancelling}
+            >
+              <Wrench className="h-4 w-4" aria-hidden="true" />
+              Edit
+            </button>
+          )}
+          <button
+            onClick={onConfirm}
+            className="btn-primary btn-sm transition-transform duration-100 active:scale-95"
+            disabled={confirming}
+          >
+            <BadgeCheck className="h-4 w-4" aria-hidden="true" />
+            {confirming ? 'Confirming…' : 'Confirm'}
+          </button>
+          <button
+            onClick={onCancel}
+            className="btn-sm btn border border-red-200 bg-white text-red-600 transition-transform duration-100 hover:bg-red-50 focus-visible:ring-red-400 active:scale-95"
+            disabled={cancelling}
+          >
+            <XCircle className="h-4 w-4" aria-hidden="true" />
+            {cancelling ? 'Cancelling…' : 'Cancel'}
+          </button>
         </div>
       ) : (
         // Read-only record of money already confirmed on an unfinished item.

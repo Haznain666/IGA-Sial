@@ -264,19 +264,29 @@ export function AppProvider({ children }) {
         const created = await api.createSponsorships(rows)
         dispatch({ type: 'CART_CLEAR' })
         await reloadSponsorships()
+        await reloadProducts()
         return created
       },
       confirmSponsorship: async (id, recipient) => {
         await api.confirmSponsorship(id, recipient)
         await reloadSponsorships()
+        await reloadProducts()
       },
       cancelSponsorship: async (id) => {
         await api.setSponsorshipStatus(id, 'cancelled')
         await reloadSponsorships()
+        await reloadProducts()
       },
       releaseSponsorship: async (id) => {
         await api.setSponsorshipStatus(id, 'released')
         await reloadSponsorships()
+        await reloadProducts()
+      },
+      updateSponsorship: async (id, patch) => {
+        const updated = await api.updateSponsorship(id, patch)
+        await reloadSponsorships()
+        await reloadProducts()
+        return updated
       },
 
       signIn: (email, password) => api.signIn(email, password),
