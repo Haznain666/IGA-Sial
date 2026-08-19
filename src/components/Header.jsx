@@ -12,6 +12,11 @@ const NAV = [
   { id: 'equipment', label: 'Equipment' },
   { id: 'contact', label: 'Contact' },
 ]
+  
+// Additional top-level pages (not in-page sections)
+const PAGES = [
+  { to: '/sponsored', label: 'Our Sponsored' },
+]
 
 export default function Header() {
   const [open, setOpen] = useState(false)
@@ -58,6 +63,12 @@ export default function Header() {
               {item.label}
             </button>
           ))}
+
+          {PAGES.map((p) => (
+            <Link key={p.to} to={p.to} className="rounded-full px-3.5 py-2 text-sm font-medium text-ink/70 transition-colors hover:bg-brand-50 hover:text-pine">
+              {p.label}
+            </Link>
+          ))}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -94,6 +105,9 @@ export default function Header() {
                 {item.label}
               </button>
             ))}
+              <Link to="/sponsored" onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-left text-base font-medium text-ink/80 transition-colors hover:bg-brand-50 hover:text-pine">
+              Our Sponsored
+              </Link>
             <Link to="/select" onClick={() => setOpen(false)} className="btn-gold btn-lg mt-2">
               <Heart className="h-4 w-4" aria-hidden="true" />
               Sponsor now

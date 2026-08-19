@@ -7,6 +7,7 @@ import Home from './pages/Home.jsx'
 import ProductSelection from './pages/ProductSelection.jsx'
 import SponsorPage from './pages/SponsorPage.jsx'
 import ThankYou from './pages/ThankYou.jsx'
+import Sponsored from './pages/Sponsored.jsx'
 import NotFound from './pages/NotFound.jsx'
 
 // Auth entry points sit outside the public chrome — they have their own shell.
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/select" element={<ProductSelection />} />
             <Route path="/sponsor" element={<SponsorPage />} />
+            <Route path="/sponsored" element={<Sponsored />} />
             {/* Old link kept alive so bookmarks and shared URLs still land. */}
             <Route path="/donation" element={<Navigate to="/sponsor" replace />} />
             <Route path="/thank-you" element={<ThankYou />} />

@@ -346,11 +346,11 @@ export default function ConfirmSponsorships() {
           }
         }} noValidate className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <RField label="First name" value={editForm.firstName} onChange={(v) => setEditForm((f) => ({ ...f, firstName: v }))} error={errors.firstName} required />
-            <RField label="Last name" value={editForm.lastName} onChange={(v) => setEditForm((f) => ({ ...f, lastName: v }))} error={errors.lastName} required />
+            <RField label="First name" value={editForm.firstName} onChange={(ev) => setEditForm((f) => ({ ...f, firstName: ev.target.value }))} error={errors.firstName} required />
+            <RField label="Last name" value={editForm.lastName} onChange={(ev) => setEditForm((f) => ({ ...f, lastName: ev.target.value }))} error={errors.lastName} required />
           </div>
-          <RField label="Mobile number" type="tel" value={editForm.phone} onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))} />
-          <RField label="Email" type="email" value={editForm.email} onChange={(v) => setEditForm((f) => ({ ...f, email: v }))} />
+          <RField label="Mobile number" type="tel" value={editForm.phone} onChange={(ev) => setEditForm((f) => ({ ...f, phone: ev.target.value }))} />
+          <RField label="Email" type="email" value={editForm.email} onChange={(ev) => setEditForm((f) => ({ ...f, email: ev.target.value }))} />
         </form>
       </Modal>
     </>
@@ -459,13 +459,14 @@ function ConfirmationCard({ sponsorship: s, product, remaining, holdLabel, onCon
           {onEdit && (
             <button
               onClick={onEdit}
-              className="btn-sm btn-ghost transition-transform duration-100 active:scale-95"
-              disabled={confirming || cancelling}
-            >
-              <Wrench className="h-4 w-4" aria-hidden="true" />
-              Edit
-            </button>
-          )}
+                        title="Edit donor"
+                        aria-label="Edit donor"
+                        className="btn-ghost btn-sm p-2"
+                        disabled={confirming || cancelling}
+                      >
+                        <Wrench className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    )}
           <button
             onClick={onConfirm}
             className="btn-primary btn-sm transition-transform duration-100 active:scale-95"
