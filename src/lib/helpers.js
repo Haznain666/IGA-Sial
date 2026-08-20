@@ -51,6 +51,18 @@ export function isPhone(v) {
   return digits.length >= 7 && digits.length <= 15
 }
 
+export function countryFromPhone(value) {
+  const raw = String(value || '').trim()
+  const digits = raw.replace(/[^\d+]/g, '')
+  if (digits.startsWith('+92') || digits.startsWith('0092') || /^03\d{9}$/.test(digits)) return 'Pakistan'
+  if (digits.startsWith('+44') || digits.startsWith('0044')) return 'United Kingdom'
+  if (digits.startsWith('+1') || digits.startsWith('001')) return 'United States/Canada'
+  if (digits.startsWith('+61') || digits.startsWith('0061')) return 'Australia'
+  if (digits.startsWith('+971') || digits.startsWith('00971')) return 'United Arab Emirates'
+  if (digits.startsWith('+966') || digits.startsWith('00966')) return 'Saudi Arabia'
+  return 'Unknown'
+}
+
 export function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n))
 }

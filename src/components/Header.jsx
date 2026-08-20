@@ -15,7 +15,7 @@ const NAV = [
   
 // Additional top-level pages (not in-page sections)
 const PAGES = [
-  { to: '/sponsored', label: 'Our Sponsored' },
+  { to: '/sponsored', label: 'Sponsored Assets' },
 ]
 
 export default function Header() {
@@ -106,7 +106,7 @@ export default function Header() {
               </button>
             ))}
               <Link to="/sponsored" onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-left text-base font-medium text-ink/80 transition-colors hover:bg-brand-50 hover:text-pine">
-              Our Sponsored
+              Sponsored Assets
               </Link>
             <Link to="/select" onClick={() => setOpen(false)} className="btn-gold btn-lg mt-2">
               <Heart className="h-4 w-4" aria-hidden="true" />

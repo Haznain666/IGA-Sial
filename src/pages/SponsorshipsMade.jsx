@@ -34,10 +34,23 @@ export default function SponsorshipsMade() {
   }
 
   const totalPKR = completedProducts.reduce((sum, p) => sum + (Number(p.valuePKR) || 0), 0)
-  const families = new Set()
-  completedProducts.forEach((p) =>
-    sponsorsOf(p.id).forEach((s) => s.recipient && families.add(fullName(s.recipient))),
-  )
+  const exportCsv = () => {
+    const fields = ['Item ID', 'Sponsor ID', 'Sponsor Name', 'Contact Number', 'Contact Email', 'Sponsored Amount', 'Sponsorship Date']
+    const rows = completedProducts.flatMap((product) =>
+      sponsorsOf(product.id).filter((s) => s.status === 'confirmed').map((s) => [
+        product.id, s.donor?.id || s.id, fullName(s.donor) || 'Anonymous', s.donor?.phone || '', s.donor?.email || '',
+        s.amountPKR, s.confirmedAt || s.createdAt || '',
+      ]),
+    )
+    const escape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const csv = [fields, ...rows].map((row) => row.map(escape).join(',')).join('\r\n')
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `sponsored-assets-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <>
@@ -45,11 +58,12 @@ export default function SponsorshipsMade() {
         hideBack
         eyebrow="Sponsorships made"
         title="Completed sponsorships"
-        subtitle="Every fully sponsored animal and piece of equipment, with each sponsor who contributed and the receiving family."
+        subtitle="Every fully sponsored animal and piece of equipment, with the sponsor details and contribution history."
         actions={
-          <button onClick={() => navigate('/super-admin/confirmations')} className="btn-outline btn-md">
-            Confirm sponsorships
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={exportCsv} className="btn-outline btn-md">Download CSV</button>
+            <button onClick={() => navigate('/super-admin/confirmations')} className="btn-outline btn-md">Confirm sponsorships</button>
+          </div>
         }
       />
 
@@ -70,7 +84,6 @@ export default function SponsorshipsMade() {
             <div className="mb-8 grid gap-4 sm:grid-cols-3">
               <StatCard label="Sponsorships completed" value={completedProducts.length} icon={HeartHandshake} />
               <StatCard label="Total value sponsored" value={formatMoney(totalPKR, 'PKR')} icon={Gift} />
-              <StatCard label="Families supported" value={families.size || '—'} icon={User2} />
             </div>
 
             <div className="space-y-5">

@@ -18,6 +18,7 @@ export default function ProductCard({
   onToggleSelect,
   onCardClick,
   showOwner = true,
+  showCurrency = true,
   className = '',
 }) {
   const [lb, setLb] = useState({ open: false, index: 0 })
@@ -153,9 +154,11 @@ export default function ProductCard({
         {/* Reserved chip row — keeps the card height identical with or without chips. */}
         <PartialChips product={product} className="mt-3" />
 
-        <div className="mt-3">
-          <CurrencyPills valuePKR={product.valuePKR} />
-        </div>
+        {showCurrency && (
+          <div className="mt-3">
+            <CurrencyPills valuePKR={product.valuePKR} />
+          </div>
+        )}
 
         {footer && <div className="mt-4 pt-1">{footer}</div>}
       </div>
