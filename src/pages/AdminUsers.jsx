@@ -309,7 +309,7 @@ export default function AdminUsers() {
 function InviteModal({ onClose, onDone }) {
   const { toast } = useToast()
   const [email, setEmail] = useState('')
-  const [fullName, setFullName] = useState('')
+  const [fullName, setFullName] = useState('Shamila Shajer')
   const [role, setRole] = useState('admin')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -364,7 +364,7 @@ function InviteModal({ onClose, onDone }) {
           <label className="field-label" htmlFor="invite-name">Full name</label>
           <input
             id="invite-name" value={fullName} onChange={(e) => setFullName(e.target.value)}
-            placeholder="Ayesha Khan" className="field-input"
+            placeholder="Shamila Shajer" className="field-input"
           />
         </div>
         <div>
@@ -382,7 +382,7 @@ function InviteModal({ onClose, onDone }) {
 
 function EditModal({ admin, onClose, onDone }) {
   const { toast } = useToast()
-  const [fullName, setFullName] = useState(admin.fullName || '')
+  const [fullName, setFullName] = useState(admin.fullName || 'Shamila Shajer')
   const [role, setRole] = useState(admin.role || 'admin')
   const [busy, setBusy] = useState(false)
 
@@ -418,7 +418,7 @@ function EditModal({ admin, onClose, onDone }) {
           <label className="field-label" htmlFor="edit-name">Full name</label>
           <input
             id="edit-name" value={fullName} onChange={(e) => setFullName(e.target.value)}
-            placeholder="Ayesha Khan" className="field-input"
+            placeholder="Shamila Shajer" className="field-input"
           />
         </div>
         <div>

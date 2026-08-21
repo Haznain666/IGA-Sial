@@ -3,8 +3,8 @@ import Reveal from '../components/Reveal.jsx'
 import { Mail, Phone, MapPin, Heart, Building2, Globe2, Send } from 'lucide-react'
 
 const DETAILS = [
-  { icon: Mail, label: 'Email', value: 'igasialfarm@gmail.com', href: 'mailto:igasialfarm@gmail.com' },
-  { icon: Phone, label: 'WhatsApp', value: '@igasialfarm' },
+  { icon: Mail, label: 'Email', value: 'igasialfarm@gmail.com', href: 'mailto:igasialfarm@gmail.com'},
+  { icon: Phone, label: 'WhatsApp', value: '+92 313 97 42224',href: 'https://wa.me/923139742224?text=Assalam%20ualaikum%2C%20mujhe%20mazeed%20maloomat%20chahiye.', target: '_blank'},
   { icon: MapPin, label: 'Farm location', value: 'Waryam Wala, Punjab, Pakistan' },
   { icon: Globe2, label: 'Website / Social', value: '#IGASialFarm' },
 ]
@@ -56,31 +56,46 @@ export default function Contact() {
 
             <Reveal delay={0.1}>
               <div className="grid gap-4 sm:grid-cols-2">
-                {DETAILS.map((d) => {
-                  const Inner = (
-                    <>
-                      <d.icon className="h-5 w-5 text-gold-300" aria-hidden="true" />
-                      <div className="mt-3">
-                        <p className="text-xs uppercase tracking-wide text-cream/55">{d.label}</p>
-                        <p className="mt-0.5 font-heading font-medium text-cream">{d.value}</p>
-                      </div>
-                    </>
-                  )
-                  return d.href ? (
-                    <a
-                      key={d.label}
-                      href={d.href}
-                      className="rounded-2xl bg-white/10 p-5 transition-colors hover:bg-white/15"
-                    >
-                      {Inner}
-                    </a>
-                  ) : (
-                    <div key={d.label} className="rounded-2xl bg-white/10 p-5">
-                      {Inner}
-                    </div>
-                  )
-                })}
-              </div>
+  {DETAILS.map((d) => {
+    const Inner = (
+      <>
+        <d.icon
+          className="h-5 w-5 text-gold-300"
+          aria-hidden="true"
+        />
+
+        <div className="mt-3">
+          <p className="text-xs uppercase tracking-wide text-cream/55">
+            {d.label}
+          </p>
+
+          <p className="mt-0.5 font-heading font-medium text-cream">
+            {d.value}
+          </p>
+        </div>
+      </>
+    )
+
+    return d.href ? (
+      <a
+        key={d.label}
+        href={d.href}
+        target={d.target}
+        rel={d.target === '_blank' ? 'noopener noreferrer' : undefined}
+        className="rounded-2xl bg-white/10 p-5 transition-colors hover:bg-white/15"
+      >
+        {Inner}
+      </a>
+    ) : (
+      <div
+        key={d.label}
+        className="rounded-2xl bg-white/10 p-5"
+      >
+        {Inner}
+      </div>
+    )
+  })}
+</div>
 
               <div className="mt-4 rounded-2xl bg-pine p-6">
                 <h3 className="font-heading font-semibold text-cream">Sponsor payment options</h3>

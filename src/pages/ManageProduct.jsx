@@ -24,6 +24,7 @@ const blankAnimal = () => ({
   kind: 'livestock',
   images: [],
   name: '',
+  assetId: '',
   details: '',
   breed: '',
   age: '',
@@ -37,6 +38,7 @@ const blankEquipment = () => ({
   kind: 'equipment',
   images: [],
   name: '',
+  assetId: '',
   details: '',
   warranty: '',
   lifeSpan: '',
@@ -243,6 +245,7 @@ function ProductEditor({ kind, product, collectOwnerInfo, fxRates, onClose, onSa
       kind: product.kind,
       images: (product.images || []).map(normalizeImage),
       name: product.name || '',
+      assetId: product.assetId || '',
       details: product.details || '',
       valuePKR: product.valuePKR != null ? String(product.valuePKR) : '',
     }
@@ -295,6 +298,7 @@ function ProductEditor({ kind, product, collectOwnerInfo, fxRates, onClose, onSa
       kind: isEquipment ? 'equipment' : 'livestock',
       images: form.images.map(normalizeImage),
       name: form.name.trim(),
+      assetId: form.assetId.trim() || null,
       details: form.details.trim().slice(0, DETAILS_MAX),
       valuePKR: Math.round(Number(form.valuePKR)),
     }
@@ -371,6 +375,17 @@ function ProductEditor({ kind, product, collectOwnerInfo, fxRates, onClose, onSa
               className={`field-input ${errors.name ? 'field-input-invalid' : ''}`}
             />
           </FormField>
+          <FormField label="Asset ID">
+            <input
+              value={form.assetId}
+              onChange={(e) => set('assetId', e.target.value)}
+              placeholder={isEquipment ? 'EQ-1001' : 'AN-9001'}
+              className="field-input"
+            />
+          </FormField>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
           {isEquipment ? (
             <FormField label="Warranty">
               <input value={form.warranty} onChange={(e) => set('warranty', e.target.value)} placeholder="2 years" className="field-input" />
@@ -383,6 +398,9 @@ function ProductEditor({ kind, product, collectOwnerInfo, fxRates, onClose, onSa
                 ))}
               </select>
             </FormField>
+          )}
+          {!isEquipment && (
+            <div className="hidden sm:block" aria-hidden="true" />
           )}
         </div>
 

@@ -35,11 +35,17 @@ export default function SponsorshipsMade() {
 
   const totalPKR = completedProducts.reduce((sum, p) => sum + (Number(p.valuePKR) || 0), 0)
   const exportCsv = () => {
-    const fields = ['Item ID', 'Sponsor ID', 'Sponsor Name', 'Contact Number', 'Contact Email', 'Sponsored Amount', 'Sponsorship Date']
+    const fields = ['Product ID', 'Asset ID', 'Sponsor ID', 'Sponsor Name', 'Contact Number', 'Contact Email', 'Sponsored Amount', 'Sponsorship Date']
     const rows = completedProducts.flatMap((product) =>
       sponsorsOf(product.id).filter((s) => s.status === 'confirmed').map((s) => [
-        product.id, s.donor?.id || s.id, fullName(s.donor) || 'Anonymous', s.donor?.phone || '', s.donor?.email || '',
-        s.amountPKR, s.confirmedAt || s.createdAt || '',
+        product.id,
+        product.assetId || '',
+        s.donor?.id || s.id,
+        fullName(s.donor) || 'Anonymous',
+        s.donor?.phone || '',
+        s.donor?.email || '',
+        s.amountPKR,
+        s.confirmedAt || s.createdAt || '',
       ]),
     )
     const escape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`

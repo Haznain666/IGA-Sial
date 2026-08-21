@@ -65,8 +65,19 @@ export default function Footer() {
               </a>
             </li>
             <li className="flex items-center gap-3">
-              <Phone className="h-4 w-4 shrink-0 text-gold-300" aria-hidden="true" />
-              <span>Phone / WhatsApp — +92 313 97 42224 / @igsialfarm</span>
+              <Phone
+                className="h-4 w-4 shrink-0 text-gold-300"
+                aria-hidden="true"
+              />
+
+              <a
+                href="https://wa.me/923139742224"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-gold-300 transition-colors"
+              >
+                Phone / WhatsApp — +92 313 97 42224
+              </a>
             </li>
             <li className="flex items-center gap-3">
               <MapPin className="h-4 w-4 shrink-0 text-gold-300" aria-hidden="true" />

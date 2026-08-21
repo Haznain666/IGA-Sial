@@ -12,6 +12,7 @@ export function toProduct(row) {
     id: row.id,
     kind: row.kind || 'livestock',
     name: row.name || '',
+    assetId: row.asset_id || '',
     details: row.details || '',
     images: normalizeImages(Array.isArray(row.images) ? row.images : []),
     valuePKR: Number(row.value_pkr) || 0,
@@ -34,6 +35,7 @@ function fromProduct(p) {
   if (p.id !== undefined) row.id = p.id
   if (p.kind !== undefined) row.kind = p.kind
   if (p.name !== undefined) row.name = p.name
+  if (p.assetId !== undefined) row.asset_id = p.assetId || null
   if (p.details !== undefined) row.details = p.details
   if (p.images !== undefined) row.images = normalizeImages(p.images)
   if (p.valuePKR !== undefined) row.value_pkr = Number(p.valuePKR) || 0

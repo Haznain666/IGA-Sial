@@ -188,12 +188,12 @@ export default function SponsorPage() {
               <Field
                 label="First name" name="firstName" value={form.firstName}
                 onChange={update('firstName')} error={errors.firstName}
-                autoComplete="given-name" placeholder="Ayesha" required
+                autoComplete="given-name" placeholder="Shamila" required
               />
               <Field
                 label="Last name" name="lastName" value={form.lastName}
                 onChange={update('lastName')} error={errors.lastName}
-                autoComplete="family-name" placeholder="Khan" required
+                autoComplete="family-name" placeholder="Shajer" required
               />
               <Field
                 label="Email" name="email" type="email" value={form.email}
