@@ -1,31 +1,29 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import useEmblaCarousel from 'embla-carousel-react'
 import Autoplay from 'embla-carousel-autoplay'
-import { ChevronLeft, ChevronRight, Heart, Images, ArrowRight, PackageOpen, Maximize2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Heart, ArrowRight, PackageOpen } from 'lucide-react'
 import SectionHeading from '../components/SectionHeading.jsx'
-import CurrencyPills from '../components/CurrencyPills.jsx'
-import PartialChips from '../components/PartialChips.jsx'
-import Lightbox from '../components/Lightbox.jsx'
+import ProductCard from '../components/ProductCard.jsx'
 import { useApp } from '../store/AppContext.jsx'
-import { fullName } from '../lib/helpers.js'
-import { imageUrl, imageStyle } from '../lib/images.js'
 
-// Home "Meet the Herd" carousel — live products, up to five available animals.
 export default function Herd() {
-  const { availableProducts, loading } = useApp()
-  const animals = availableProducts.filter((p) => p.kind !== 'equipment').slice(0, 5)
-  const [sectionLoading, setSectionLoading] = useState(true)
+  const navigate = useNavigate()
+  const { availableProducts, loading, setCart } = useApp()
+  const animals = availableProducts.filter((p) => p.kind !== 'equipment').slice(0, 9)
+  const slides = useMemo(
+    () => {
+      const groups = []
+      for (let i = 0; i < animals.length; i += 3) groups.push(animals.slice(i, i + 3))
+      return groups
+    },
+    [animals],
+  )
 
-  useEffect(() => {
-    setSectionLoading(loading)
-  }, [loading])
-
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: animals.length > 1, align: 'center' }, [
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: slides.length > 1, align: 'center' }, [
     Autoplay({ delay: 6000, stopOnInteraction: true, stopOnMouseEnter: true }),
   ])
   const [selected, setSelected] = useState(0)
-  const [lb, setLb] = useState({ open: false, images: [], index: 0, title: '' })
 
   const onSelect = useCallback((api) => setSelected(api.selectedScrollSnap()), [])
   useEffect(() => {
@@ -35,7 +33,10 @@ export default function Herd() {
     emblaApi.on('reInit', onSelect)
   }, [emblaApi, onSelect])
 
-  const openLightbox = (images, index, title) => setLb({ open: true, images, index, title })
+  const sponsorSingle = (id) => {
+    setCart([id])
+    navigate('/sponsor')
+  }
 
   return (
     <section id="herd" className="scroll-mt-20 bg-cream py-16 sm:py-28">
@@ -53,7 +54,7 @@ export default function Herd() {
           </Link>
         </div>
 
-        {sectionLoading ? (
+        {loading ? (
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, index) => (
               <div key={index} className="overflow-hidden rounded-3xl border border-black/5 bg-white shadow-soft">
@@ -86,15 +87,28 @@ export default function Herd() {
           <div className="relative mt-8 sm:mt-12">
             <div className="overflow-hidden" ref={emblaRef}>
               <div className="flex">
-                {animals.map((animal) => (
-                  <div key={animal.id} className="min-w-0 flex-[0_0_100%] px-0.5">
-                    <FeaturedAnimal animal={animal} onOpenLightbox={openLightbox} />
+                {slides.map((group, slideIndex) => (
+                  <div key={`herd-slide-${slideIndex}`} className="min-w-0 flex-[0_0_100%] px-0.5">
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                      {group.map((animal) => (
+                        <ProductCard
+                          key={animal.id}
+                          product={animal}
+                          footer={
+                            <button onClick={() => sponsorSingle(animal.id)} className="btn-gold btn-md w-full">
+                              <Heart className="h-4 w-4" aria-hidden="true" />
+                              Sponsor now
+                            </button>
+                          }
+                        />
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {animals.length > 1 && (
+            {slides.length > 1 && (
               <div className="mt-5 flex items-center justify-center gap-4">
                 <button
                   onClick={() => emblaApi?.scrollPrev()}
@@ -104,14 +118,14 @@ export default function Herd() {
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <div className="flex gap-2">
-                  {animals.map((a, i) => (
+                  {slides.map((_, i) => (
                     <button
-                      key={a.id}
+                      key={`dot-${i}`}
                       onClick={() => emblaApi?.scrollTo(i)}
                       className={`h-2.5 rounded-full transition-all ${
                         i === selected ? 'w-7 bg-brand-500' : 'w-2.5 bg-brand-200 hover:bg-brand-300'
                       }`}
-                      aria-label={`Show ${a.name}`}
+                      aria-label={`Show slide ${i + 1}`}
                       aria-current={i === selected}
                     />
                   ))}
@@ -133,95 +147,6 @@ export default function Herd() {
           </div>
         )}
       </div>
-
-      <Lightbox
-        open={lb.open}
-        images={lb.images}
-        index={lb.index}
-        title={lb.title}
-        onClose={() => setLb((s) => ({ ...s, open: false }))}
-      />
     </section>
-  )
-}
-
-function FeaturedAnimal({ animal, onOpenLightbox }) {
-  const images = animal.images || []
-  const owner = animal.owner || {}
-  const ownerLabel = owner.ownedByFarm ? 'IGA Sial Farm' : fullName(owner) || 'Private owner'
-
-  return (
-    <div className="grid gap-0 overflow-hidden rounded-3xl bg-white shadow-lift md:grid-cols-[minmax(0,42%)_1fr]">
-      <div className="relative bg-sand">
-        <button
-          type="button"
-          onClick={() => onOpenLightbox(images, 0, animal.name)}
-          className="block aspect-[4/5] w-full cursor-zoom-in overflow-hidden"
-          aria-label={`View photos of ${animal.name}`}
-        >
-          <img
-            src={imageUrl(images[0])}
-            alt={animal.name}
-            style={imageStyle(images[0])}
-            className="h-full w-full object-cover transition-transform duration-700 hover:scale-[1.03]"
-          />
-        </button>
-        <span className="absolute left-4 top-4 chip bg-white/90 font-semibold text-pine shadow-sm">
-          {animal.type}
-        </span>
-        <span className="absolute right-4 top-4 flex h-9 items-center gap-1.5 rounded-full bg-ink/60 px-3 text-xs font-medium text-cream backdrop-blur-sm">
-          <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-          Tap to enlarge
-        </span>
-        {images.length > 1 && (
-          <div className="absolute inset-x-4 bottom-4 flex gap-2">
-            {images.slice(0, 4).map((src, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => onOpenLightbox(images, i, animal.name)}
-                className="h-11 w-11 overflow-hidden rounded-lg border-2 border-white/80 shadow-md transition-transform hover:scale-110"
-                aria-label={`View photo ${i + 1} of ${animal.name}`}
-              >
-                <img src={imageUrl(src)} alt="" className="h-full w-full object-cover" />
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col justify-center p-5 sm:p-8 lg:p-10">
-        <div className="flex items-center gap-2 text-sm text-ink/50">
-          <Images className="h-4 w-4 text-brand-500" aria-hidden="true" />
-          {images.length} {images.length === 1 ? 'photo' : 'photos'}
-        </div>
-        <h3 className="mt-1.5 font-heading text-2xl font-bold text-pine sm:text-3xl">{animal.name}</h3>
-        <p className="mt-2.5 text-sm leading-relaxed text-ink/70 sm:text-base">{animal.details}</p>
-
-        <dl className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
-          {[
-            ['Breed', animal.breed],
-            ['Age', animal.age],
-            ['Weight', animal.weight],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-2xl bg-parchment p-2.5 text-center sm:p-3">
-              <dt className="text-[11px] uppercase tracking-wide text-ink/45">{label}</dt>
-              <dd className="mt-0.5 font-heading text-sm font-semibold text-ink">{value || '—'}</dd>
-            </div>
-          ))}
-        </dl>
-
-        <PartialChips product={animal} reserveSpace={false} className="mt-5" />
-
-        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <CurrencyPills valuePKR={animal.valuePKR} size="lg" />
-          <Link to={`/select?preselect=${animal.id}`} className="btn-gold btn-lg w-full sm:w-auto">
-            <Heart className="h-5 w-5" aria-hidden="true" />
-            Sponsor now
-          </Link>
-        </div>
-        <p className="mt-3 text-xs text-ink/45">Owner: {ownerLabel}</p>
-      </div>
-    </div>
   )
 }
