@@ -98,7 +98,7 @@ export default function Footer() {
       <div className="border-t border-cream/10">
         <div className="container-x py-5 text-center">
           <p className="text-xs text-cream/50">
-            © 2026 IGA Sial Farm · Sponsor-a-Cow Program. All rights reserved.
+            © 2026 IGA Sial Farm · Sponsor-a-Cow Program. All rights reserved. <a href="https://techsurgeinc.com/">Techsurge</a>
           </p>
         </div>
       </div>
