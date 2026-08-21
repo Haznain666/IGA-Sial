@@ -3,6 +3,7 @@ import { Routes, Route, Outlet, Navigate } from 'react-router-dom'
 import Header from './components/Header.jsx'
 import Footer from './components/Footer.jsx'
 import ScrollToTop from './components/ScrollToTop.jsx'
+import WhatsAppButton from './components/WhatsAppButton.jsx'
 import Home from './pages/Home.jsx'
 import ProductSelection from './pages/ProductSelection.jsx'
 import SponsorPage from './pages/SponsorPage.jsx'
@@ -31,6 +32,7 @@ function PublicLayout() {
         <Outlet />
       </main>
       <Footer />
+      <WhatsAppButton />
     </div>
   )
 }

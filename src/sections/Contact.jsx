@@ -4,7 +4,7 @@ import { Mail, Phone, MapPin, Heart, Building2, Globe2, Send } from 'lucide-reac
 
 const DETAILS = [
   { icon: Mail, label: 'Email', value: 'igasialfarm@gmail.com', href: 'mailto:igasialfarm@gmail.com'},
-  { icon: Phone, label: 'WhatsApp', value: '+92 313 97 42224',href: 'https://wa.me/923139742224?text=Assalam%20ualaikum%2C%20mujhe%20mazeed%20maloomat%20chahiye.', target: '_blank'},
+  { icon: Phone, label: 'WhatsApp', value: '+92 313 97 42224', href: 'https://wa.me/923139742224', target: '_blank' },
   { icon: MapPin, label: 'Farm location', value: 'Waryam Wala, Punjab, Pakistan' },
   { icon: Globe2, label: 'Website / Social', value: '#IGASialFarm' },
 ]
