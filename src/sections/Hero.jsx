@@ -56,15 +56,13 @@ Sponsor an Asset. Create a Lasting Impact.
 
         <motion.p
           variants={item}
-          className="mt-6 max-w-xl text-lg leading-relaxed text-cream/85 sm:text-xl"
-        >
-        Choose a livestock animal or essential farm equipment and sponsor its purchase through IGA Sial Farm. 
-        We will care for and manage the asset responsibly, while the income generated from its milk production or 
-        the use of the equipment is continuously reinvested to support families in need, educate children, create 
-        employment, and fund community development initiatives.
+          className="mt-6 max-w-xl text-lg leading-relaxed text-cream/85 sm:text-xl">
+          Sponsor livestock or equipment. Transform Lives.
         <br/>
-        Your generosity goes beyond a one-time donation. It helps create sustainable livelihoods, dignified employment, and a more self-reliant village—transforming a single act of generosity into a lasting legacy of hope and opportunity."
-
+          The income generated from livestock or from the use of farm equipment will be reinvested to create employment, support families, educate children, empower women, and strengthen the village community.
+        <br/>
+          Your sponsorship is more than a donation—it’s an investment in sustainable livelihoods, dignity, and a brighter future.
+          Sponsor today. Create a lasting legacy.
         </motion.p>
 
         <motion.div variants={item} className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
