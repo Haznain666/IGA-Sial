@@ -3,6 +3,7 @@ import { uid } from '../lib/helpers.js'
 import { ToastProvider } from './ToastContext.jsx'
 import * as api from '../supabase/api.js'
 import { onAuthChange, getSession } from '../supabase/api.js'
+import { formatMoney } from '../lib/currency.js'
 
 const CART_KEY = 'iga-cart'
 const MAX_BANKS = 5
@@ -45,11 +46,11 @@ function loadCart() {
 function reducer(state, action) {
   switch (action.type) {
     case 'SET_PRODUCTS':
-      return { ...state, products: action.products, loading: false }
+      return { ...state, products: action.products, productsLoading: false }
     case 'SET_SPONSORSHIPS':
-      return { ...state, sponsorships: action.sponsorships }
+      return { ...state, sponsorships: action.sponsorships, sponsorshipsLoading: false }
     case 'SET_SETTINGS':
-      return { ...state, settings: action.settings }
+      return { ...state, settings: action.settings, settingsLoading: false }
     case 'SET_SESSION':
       // A new session invalidates what we knew about admin rights.
       return { ...state, session: action.session, authLoading: false, isAdmin: null }
@@ -106,6 +107,9 @@ export function AppProvider({ children }) {
     settings: EMPTY_SETTINGS,
     cart: loadCart(),
     loading: true,
+    productsLoading: true,
+    sponsorshipsLoading: true,
+    settingsLoading: true,
     session: null,
     authLoading: true,
     // true / false once checked; null = unknown (no session, or a database
@@ -120,7 +124,7 @@ export function AppProvider({ children }) {
       dispatch({ type: 'SET_PRODUCTS', products: await api.fetchProducts() })
     } catch (e) {
       console.error('Could not load products:', e)
-      dispatch({ type: 'SET_PRODUCTS', products: [] })
+      dispatch({ type: 'SET_PRODUCTS', products: stateRef.current.products })
     }
   }, [])
 
@@ -129,6 +133,7 @@ export function AppProvider({ children }) {
       dispatch({ type: 'SET_SPONSORSHIPS', sponsorships: await api.fetchSponsorships() })
     } catch (e) {
       console.error('Could not load sponsorships:', e)
+      dispatch({ type: 'SET_SPONSORSHIPS', sponsorships: stateRef.current.sponsorships })
     }
   }, [])
 
@@ -137,6 +142,7 @@ export function AppProvider({ children }) {
       dispatch({ type: 'SET_SETTINGS', settings: await api.fetchSettings() })
     } catch (e) {
       console.error('Could not load settings:', e)
+      dispatch({ type: 'SET_SETTINGS', settings: stateRef.current.settings })
     }
   }, [])
 
@@ -268,9 +274,49 @@ export function AppProvider({ children }) {
         return created
       },
       confirmSponsorship: async (id, recipient) => {
-        await api.confirmSponsorship(id, recipient)
+        // Confirm in DB
+        const confirmed = await api.confirmSponsorship(id, recipient)
         await reloadSponsorships()
         await reloadProducts()
+
+        // Queue a confirmation email (outbox). The server/worker should deliver
+        // messages from inbox_entries. Do best-effort here — failures should
+        // not block the confirmation flow.
+        try {
+          const sponsorEmail = confirmed?.donor?.email
+          if (sponsorEmail) {
+            const settings = stateRef.current.settings || {}
+            const template = settings.confirmationEmailBody || ''
+            const subjectTemplate = settings.confirmationEmailSubject || ''
+            const product = stateRef.current.products.find((p) => p.id === confirmed.productId) || null
+            const ctx = {
+              donor: confirmed.donor || {},
+              product,
+              sponsorship: confirmed,
+              amount: confirmed.amountPKR || 0,
+              amountFormatted: formatMoney(confirmed.amountPKR || 0, 'PKR'),
+            }
+            const render = (t) => {
+              if (!t) return ''
+              return String(t)
+                .replace(/{{\s*donor_firstName\s*}}/g, ctx.donor.firstName || '')
+                .replace(/{{\s*donor_lastName\s*}}/g, ctx.donor.lastName || '')
+                .replace(/{{\s*donor_email\s*}}/g, ctx.donor.email || '')
+                .replace(/{{\s*product_name\s*}}/g, product?.name || '')
+                .replace(/{{\s*product_id\s*}}/g, product?.id || '')
+                .replace(/{{\s*sponsorship_id\s*}}/g, confirmed.id || '')
+                .replace(/{{\s*amount\s*}}/g, String(ctx.amount || ''))
+                .replace(/{{\s*amountPKR\s*}}/g, ctx.amountFormatted || '')
+            }
+            const subject = subjectTemplate ? render(subjectTemplate) : `Sponsorship confirmed — ${product?.name || ''}`
+            const body = render(template)
+            await api.createInboxEntry({ to: sponsorEmail, subject, body, sponsorshipId: confirmed.id })
+          }
+        } catch (e) {
+          // don't block the UI flow — log and move on
+          // eslint-disable-next-line no-console
+          console.error('Could not queue confirmation email:', e)
+        }
       },
       cancelSponsorship: async (id) => {
         await api.setSponsorshipStatus(id, 'cancelled')
@@ -316,10 +362,11 @@ export function AppProvider({ children }) {
       return settings.partialLivestockEnabled && product.valuePKR >= (settings.partialLivestockMin || 0)
     }
 
-    const openOf = (id) => (byProduct.get(id) || []).filter((s) => s.status === 'pending' || s.status === 'confirmed')
+    const openOf = (id) => (byProduct.get(id) || []).filter((s) => s.status === 'pending')
 
     return {
       ...state,
+      loading: state.productsLoading || state.sponsorshipsLoading || state.settingsLoading,
       ...actions,
       MAX_BANKS,
       livestock: products.filter((p) => p.kind !== 'equipment'),

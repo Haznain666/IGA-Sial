@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   ToggleRight, ScrollText, Landmark, Plus, Pencil, Trash2, CheckCircle2, Building2, ListChecks,
-  UserCog, Coins, CalendarClock, HandCoins, Beef, Wrench,
+  UserCog, Coins, CalendarClock, HandCoins, Beef, Wrench, Mail,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import Modal from '../components/Modal.jsx'
@@ -16,6 +16,8 @@ export default function SettingsPage() {
   const { toast } = useToast()
 
   const [terms, setTerms] = useState(settings.terms)
+  const [confirmationSubject, setConfirmationSubject] = useState(settings.confirmationEmailSubject || '')
+  const [confirmationBody, setConfirmationBody] = useState(settings.confirmationEmailBody || '')
   const [saving, setSaving] = useState(false)
   const [bankBusyId, setBankBusyId] = useState('')
   const [fx, setFx] = useState(() => ({
@@ -217,6 +219,37 @@ export default function SettingsPage() {
             >
               <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
               {saving ? 'Saving…' : 'Save terms'}
+            </button>
+          </div>
+        </SettingCard>
+
+        <SettingCard icon={Mail} title="Sponsorship confirmation email" description="The message sent to sponsors when a sponsorship is confirmed. Use placeholders like {{donor_firstName}}, {{product_name}}, {{amountPKR}}, and {{sponsorship_id}}.">
+          <label className="field-label" htmlFor="email-subject">Email subject</label>
+          <input
+            id="email-subject" type="text" value={confirmationSubject} onChange={(e) => setConfirmationSubject(e.target.value)}
+            className="field-input"
+            placeholder="Sponsorship confirmed — {{product_name}}"
+          />
+
+          <label className="field-label mt-3" htmlFor="email-body">Email body</label>
+          <textarea
+            id="email-body"
+            value={confirmationBody}
+            onChange={(e) => setConfirmationBody(e.target.value)}
+            rows={8}
+            className="field-input resize-y whitespace-pre-line font-body text-sm leading-relaxed"
+            placeholder={'Dear {{donor_firstName}},\n\nThank you for sponsoring {{product_name}} ({{product_id}}) — your contribution of {{amountPKR}} has been confirmed.\n\nSponsorship ID: {{sponsorship_id}}\n\nWarm regards,\nIGA Sial Farm'}
+          />
+          <div className="mt-3 flex justify-end">
+            <button
+              onClick={() => save({ confirmationEmailSubject: confirmationSubject, confirmationEmailBody: confirmationBody }, 'Confirmation email saved.')}
+              className="btn-primary btn-md"
+              disabled={(
+                (confirmationSubject === settings.confirmationEmailSubject) && (confirmationBody === settings.confirmationEmailBody)
+              ) || saving}
+            >
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              {saving ? 'Saving…' : 'Save email template'}
             </button>
           </div>
         </SettingCard>

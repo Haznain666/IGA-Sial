@@ -80,6 +80,8 @@ export function toSettings(row) {
     partialLivestockMin: Number(row.partial_livestock_min) || 0,
     partialEquipmentEnabled: !!row.partial_equipment_enabled,
     partialEquipmentMin: Number(row.partial_equipment_min) || 0,
+    confirmationEmailSubject: row.confirmation_email_subject || '',
+    confirmationEmailBody: row.confirmation_email_body || '',
   }
 }
 
@@ -96,6 +98,8 @@ const SETTINGS_COLUMNS = {
   partialLivestockMin: 'partial_livestock_min',
   partialEquipmentEnabled: 'partial_equipment_enabled',
   partialEquipmentMin: 'partial_equipment_min',
+  confirmationEmailSubject: 'confirmation_email_subject',
+  confirmationEmailBody: 'confirmation_email_body',
 }
 
 function fromSettings(patch) {
@@ -247,6 +251,24 @@ export async function updateSponsorship(id, patch) {
     await supabase.from('sponsorships').update(row).eq('id', id).select().single(),
   )
   return toSponsorship(data)
+}
+
+// Simple outbox queue for outbound emails. The backend (cron or worker)
+// should read from `inbox_entries` and deliver messages. This avoids
+// embedding SMTP secrets in the client and lets the server send mail from
+// the configured address (e.g. IGASialFarm@gmail.com).
+export async function createInboxEntry(entry) {
+  // entry: { to, subject, body, sponsorshipId }
+  const row = {
+    to_address: entry.to,
+    subject: entry.subject,
+    body: entry.body,
+    from_address: entry.from || 'IGASialFarm@gmail.com',
+    sponsorship_id: entry.sponsorshipId || null,
+    created_at: new Date().toISOString(),
+  }
+  const data = unwrap(await supabase.from('inbox_entries').insert(row).select().single())
+  return data
 }
 
 // ---- settings ---------------------------------------------------------------
