@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Heart, ShoppingCart, Check, Plus, PackageOpen, X } from 'lucide-react'
+import { Heart, ShoppingCart, Check, Plus, PackageOpen, X, Search } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import ProductCard from '../components/ProductCard.jsx'
 import EmptyState from '../components/EmptyState.jsx'
@@ -25,6 +25,7 @@ export default function ProductSelection() {
   const [page, setPage] = useState(1)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const searchInputRef = useRef(null)
 
   const items = useMemo(() => {
     const base = filter === 'all'
@@ -170,31 +171,41 @@ export default function ProductSelection() {
           />
         ) : (
           <>
-            <div className="mb-6 flex flex-wrap items-center gap-2">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => setFilter(f.id)}
-                  aria-pressed={filter === f.id}
-                  className={`chip cursor-pointer px-4 py-2 text-sm transition-colors ${
-                    filter === f.id
-                      ? 'bg-brand-500 text-white'
-                      : 'border border-brand-200 bg-white text-ink/70 hover:bg-brand-50'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+            <div className="mb-6 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                {FILTERS.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setFilter(f.id)}
+                    aria-pressed={filter === f.id}
+                    className={`chip cursor-pointer px-4 py-2 text-sm transition-colors ${
+                      filter === f.id
+                        ? 'bg-brand-500 text-white'
+                        : 'border border-brand-200 bg-white text-ink/70 hover:bg-brand-50'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
 
-            <div className="mb-6">
-              <label className="field-label">Search items</label>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by item name, asset ID, type or breed"
-                className="field-input"
-              />
+              <div className="relative w-full max-w-md xl:w-[320px]">
+                <input
+                  ref={searchInputRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by item name, asset ID, type or breed"
+                  className="field-input w-full pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => searchInputRef.current?.focus()}
+                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-600 transition-colors hover:bg-brand-100"
+                  aria-label="Focus search"
+                >
+                  <Search className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             {multi && (
