@@ -3,14 +3,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 
 const RESEND_API = 'https://api.resend.com/emails'
 
-serve(async (req) => {
-  const expectedSecret = Deno.env.get('CRON_SECRET')
-  const providedSecret = req.headers.get('x-cron-secret') || req.headers.get('X-Cron-Secret') || ''
-
-  if (!expectedSecret || providedSecret !== expectedSecret) {
-    return Response.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
-  }
-
+serve(async () => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
