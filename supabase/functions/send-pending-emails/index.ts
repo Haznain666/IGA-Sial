@@ -1,19 +1,27 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { SMTPClient } from 'https://deno.land/x/denomailer/mod.ts'
 
-const RESEND_API = 'https://api.resend.com/emails'
+serve(async (req) => {
+  const expectedSecret = Deno.env.get('CRON_SECRET')
+  const providedSecret = req.headers.get('x-cron-secret') || req.headers.get('X-Cron-Secret') || ''
 
-serve(async () => {
+  if (!expectedSecret || providedSecret !== expectedSecret) {
+    return Response.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const gmailUser = Deno.env.get('GMAIL_USER')
+  const gmailAppPassword = Deno.env.get('GMAIL_APP_PASSWORD')
+
+  if (!gmailAppPassword) {
+    return Response.json({ ok: false, error: 'GMAIL_APP_PASSWORD not set yet' }, { status: 500 })
+  }
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  const resendApiKey = Deno.env.get('RESEND_API_KEY')
 
   if (!supabaseUrl || !serviceRoleKey) {
     return Response.json({ ok: false, error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' }, { status: 500 })
-  }
-
-  if (!resendApiKey) {
-    return Response.json({ ok: false, error: 'Missing RESEND_API_KEY' }, { status: 500 })
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -35,39 +43,42 @@ serve(async () => {
   }
 
   const rows = data || []
+  const client = new SMTPClient({
+    connection: {
+      hostname: 'smtp.gmail.com',
+      port: 587,
+      tls: true,
+      auth: {
+        username: gmailUser || 'IGASialFarm@gmail.com',
+        password: gmailAppPassword,
+      },
+    },
+  })
+
   let sent = 0
   let failed = 0
 
-  for (const row of rows) {
-    try {
-      const response = await fetch(RESEND_API, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+  try {
+    for (const row of rows) {
+      try {
+        await client.send({
           from: row.from_address,
           to: row.to_address,
           subject: row.subject,
-          text: row.body,
-        }),
-      })
-
-      if (!response.ok) {
-        const body = await response.text()
-        const message = `Resend ${response.status}: ${body}`
-        await markFailed(supabase, row.id, message)
+          content: row.body,
+        })
+        await markSent(supabase, row.id)
+        sent += 1
+      } catch (err) {
+        await markFailed(supabase, row.id, err instanceof Error ? err.message : String(err))
         failed += 1
-        continue
       }
-
-      await markSent(supabase, row.id)
-      sent += 1
-    } catch (err) {
-      await markFailed(supabase, row.id, err instanceof Error ? err.message : String(err))
-      failed += 1
     }
+
+    await client.close()
+  } catch (err) {
+    await client.close().catch(() => {})
+    return Response.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, { status: 500 })
   }
 
   return Response.json({ ok: true, processed: rows.length, sent, failed })
