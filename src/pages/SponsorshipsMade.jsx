@@ -1,20 +1,63 @@
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ScrollText, User2, Gift, HeartHandshake, Mail, Phone, Fingerprint, Landmark, Calendar,
-  Wrench, Beef, Users,
+  Wrench, Beef, Users, Trash2, AlertTriangle,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
+import Modal from '../components/Modal.jsx'
+import ProductCard from '../components/ProductCard.jsx'
 import { useApp } from '../store/AppContext.jsx'
+import { useToast } from '../store/ToastContext.jsx'
 import { formatMoney } from '../lib/currency.js'
 import { fullName, formatDateTime } from '../lib/helpers.js'
-import { imageUrl } from '../lib/images.js'
 
 // A product appears here exactly once, and only once it is FULLY sponsored with
 // every contribution confirmed. The card then lists every sponsor who chipped in.
 export default function SponsorshipsMade() {
   const navigate = useNavigate()
-  const { completedProducts, sponsorsOf, bankById, loading } = useApp()
+  const { toast } = useToast()
+  const { completedProducts, sponsorsOf, bankById, loading, deleteProduct } = useApp()
+  const [search, setSearch] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+
+  const filteredProducts = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return completedProducts
+
+    return completedProducts.filter((product) => {
+      const haystack = [
+        product.name,
+        product.assetId,
+        product.type,
+        product.breed,
+        product.kind,
+        ...sponsorsOf(product.id).map((s) => [
+          fullName(s.donor),
+          s.donor?.email,
+          s.donor?.phone,
+          s.id,
+        ].filter(Boolean).join(' ')),
+      ].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [completedProducts, search, sponsorsOf])
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return
+    setDeleteBusy(true)
+    try {
+      await deleteProduct(confirmDelete.id)
+      toast(`${confirmDelete.name} was removed.`, { type: 'info' })
+      setConfirmDelete(null)
+    } catch (e) {
+      toast(e.message, { type: 'error', duration: 6000 })
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -74,11 +117,25 @@ export default function SponsorshipsMade() {
       />
 
       <div className="container-x py-10 sm:py-12">
-        {completedProducts.length === 0 ? (
+        <div className="mb-6">
+          <label className="field-label">Search completed sponsorships</label>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by product name, asset ID, sponsor name or phone"
+            className="field-input"
+          />
+        </div>
+
+        {filteredProducts.length === 0 ? (
           <EmptyState
             icon={ScrollText}
-            title="No completed sponsorships yet"
-            description="Once every contribution towards an item is confirmed, it appears here with full sponsor and recipient details."
+            title={search ? 'No completed sponsorships matched your search' : 'No completed sponsorships yet'}
+            description={
+              search
+                ? 'Try a different keyword or clear the search to view all completed sponsorships.'
+                : 'Once every contribution towards an item is confirmed, it appears here with full sponsor and recipient details.'
+            }
             action={
               <button onClick={() => navigate('/super-admin/confirmations')} className="btn-primary btn-md">
                 Go to confirmations
@@ -88,155 +145,80 @@ export default function SponsorshipsMade() {
         ) : (
           <>
             <div className="mb-8 grid gap-4 sm:grid-cols-3">
-              <StatCard label="Sponsorships completed" value={completedProducts.length} icon={HeartHandshake} />
-              <StatCard label="Total value sponsored" value={formatMoney(totalPKR, 'PKR')} icon={Gift} />
+              <StatCard label="Sponsorships completed" value={filteredProducts.length} icon={HeartHandshake} />
+              <StatCard label="Total value sponsored" value={formatMoney(filteredProducts.reduce((sum, p) => sum + (Number(p.valuePKR) || 0), 0), 'PKR')} icon={Gift} />
             </div>
 
-            <div className="space-y-5">
-              {completedProducts.map((p) => {
+            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredProducts.map((p) => {
                 const sponsors = sponsorsOf(p.id)
-                const isEquipment = p.kind === 'equipment'
-                const Icon = isEquipment ? Wrench : Beef
                 const lastConfirmed = sponsors
                   .map((s) => s.confirmedAt)
                   .filter(Boolean)
                   .sort()
                   .pop()
-                const recipient = sponsors.find((s) => s.recipient)?.recipient || null
 
                 return (
-                  <article key={p.id} className="card overflow-hidden">
-                    <div className="flex flex-wrap items-center gap-4 border-b border-black/5 bg-parchment p-5">
-                      <img
-                        src={imageUrl(p.images?.[0])}
-                        alt={p.name}
-                        className="h-24 w-20 shrink-0 rounded-2xl object-cover"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-heading text-lg font-semibold text-pine">{p.name}</p>
-                        <p className="flex items-center gap-1.5 text-sm text-ink/50">
-                          <Icon className="h-3.5 w-3.5 shrink-0 text-brand-500" aria-hidden="true" />
-                          {isEquipment
-                            ? [p.warranty, p.lifeSpan].filter(Boolean).join(' · ') || 'Equipment'
-                            : [p.type, p.breed].filter(Boolean).join(' · ')}
-                        </p>
-                        <p className="mt-1 font-heading font-semibold text-brand-600">
-                          {formatMoney(p.valuePKR, 'PKR')}
-                        </p>
-                      </div>
-                      <span className="chip bg-brand-50 text-xs font-medium text-brand-700">
-                        <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                        {sponsors.length} {sponsors.length === 1 ? 'sponsor' : 'sponsors'}
-                      </span>
-                    </div>
-
-                    <div className="grid gap-5 p-5 lg:grid-cols-[1fr_minmax(0,280px)]">
-                      <div>
-                        <p className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink/45">
-                          <User2 className="h-3.5 w-3.5 text-brand-500" aria-hidden="true" />
-                          Sponsors
-                        </p>
-                        <ul className="space-y-3">
-                          {sponsors.map((s) => {
-                            const bank = s.bankId ? bankById(s.bankId) : null
-                            return (
-                              <li
-                                key={s.id}
-                                className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-black/5 bg-parchment/60 p-3"
-                              >
-                                <div className="min-w-0">
-                                  <p className="font-heading font-semibold text-pine">
-                                    {fullName(s.donor) || '—'}
-                                  </p>
-                                  <div className="mt-1 space-y-0.5">
-                                    {s.donor?.email && (
-                                      <p className="flex items-center gap-1.5 break-all text-sm text-ink/60">
-                                        <Mail className="h-3.5 w-3.5 shrink-0 text-brand-400" aria-hidden="true" />
-                                        {s.donor.email}
-                                      </p>
-                                    )}
-                                    {s.donor?.phone && (
-                                      <p className="flex items-center gap-1.5 text-sm text-ink/60">
-                                        <Phone className="h-3.5 w-3.5 shrink-0 text-brand-400" aria-hidden="true" />
-                                        {s.donor.phone}
-                                      </p>
-                                    )}
-                                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink/45">
-                                      <span className="flex items-center gap-1.5">
-                                        <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-                                        {formatDateTime(s.confirmedAt)}
-                                      </span>
-                                      {bank && (
-                                        <span className="flex items-center gap-1.5">
-                                          <Landmark className="h-3.5 w-3.5" aria-hidden="true" />
-                                          {bank.bankName}
-                                        </span>
-                                      )}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <p className="font-heading font-semibold tabular-nums text-brand-600">
-                                    {formatMoney(s.amountPKR, 'PKR')}
-                                  </p>
-                                  {s.isPartial && (
-                                    <span className="chip mt-1 bg-gold-100 text-[11px] text-gold-800">Partial</span>
-                                  )}
-                                </div>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      </div>
-
-                      <div>
-                        <p className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink/45">
-                          <HeartHandshake className="h-3.5 w-3.5 text-brand-500" aria-hidden="true" />
-                          Recipient
-                        </p>
-                        <div className="rounded-2xl border border-black/5 bg-parchment/60 p-3">
-                          <p className={`font-heading font-semibold ${recipient ? 'text-pine' : 'text-ink/40'}`}>
-                            {recipient ? fullName(recipient) : 'Not recorded'}
-                          </p>
-                          {recipient && (
-                            <div className="mt-1 space-y-0.5">
-                              {recipient.cnic && (
-                                <p className="flex items-center gap-1.5 text-sm text-ink/60">
-                                  <Fingerprint className="h-3.5 w-3.5 shrink-0 text-brand-400" aria-hidden="true" />
-                                  {recipient.cnic}
-                                </p>
-                              )}
-                              {recipient.phone && (
-                                <p className="flex items-center gap-1.5 text-sm text-ink/60">
-                                  <Phone className="h-3.5 w-3.5 shrink-0 text-brand-400" aria-hidden="true" />
-                                  {recipient.phone}
-                                </p>
-                              )}
-                              {recipient.email && (
-                                <p className="flex items-center gap-1.5 break-all text-sm text-ink/60">
-                                  <Mail className="h-3.5 w-3.5 shrink-0 text-brand-400" aria-hidden="true" />
-                                  {recipient.email}
-                                </p>
-                              )}
-                            </div>
-                          )}
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    showOwner={false}
+                    footer={
+                      <div className="space-y-3 relative">
+                        <div className="flex items-center gap-2 text-xs text-ink/60">
+                          <Users className="h-3.5 w-3.5 text-brand-500" aria-hidden="true" />
+                          <span>{sponsors.length} {sponsors.length === 1 ? 'sponsor' : 'sponsors'}</span>
+                          {lastConfirmed && <span>· {formatDateTime(lastConfirmed)}</span>}
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(p)}
+                          className="absolute right-0 bottom-0 flex h-10 w-10 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 transition-colors hover:bg-red-50"
+                          aria-label={`Delete ${p.name}`}
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
                       </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-black/5 bg-white px-5 py-3 text-xs text-ink/50">
-                      <span className="flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-                        Fully sponsored {formatDateTime(lastConfirmed)}
-                      </span>
-                    </div>
-                  </article>
+                    }
+                  />
                 )
               })}
             </div>
           </>
         )}
       </div>
+
+      <Modal
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        title="Delete sponsored item"
+        description="This will remove the item from the sponsored list."
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setConfirmDelete(null)} className="btn-md btn border border-red-200 bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500" disabled={deleteBusy}>
+              Cancel
+            </button>
+            <button type="button" onClick={handleDelete} className="btn-primary btn-md" disabled={deleteBusy}>
+              {deleteBusy ? 'Deleting…' : 'Sure'}
+            </button>
+          </div>
+        }
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500">
+            <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <p className="text-ink/75">
+            Are you sure you want to delete this sponsored item?
+            <span className="mt-2 block font-semibold text-ink">
+              {confirmDelete?.name || 'Item'}
+              {confirmDelete?.assetId ? ` · ${confirmDelete.assetId}` : ''}
+            </span>
+          </p>
+        </div>
+      </Modal>
     </>
   )
 }

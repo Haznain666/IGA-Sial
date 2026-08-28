@@ -24,19 +24,34 @@ export default function ProductSelection() {
   const multi = settings.multiSelect
   const [page, setPage] = useState(1)
   const [filter, setFilter] = useState('all')
+  const [search, setSearch] = useState('')
 
-  const items = useMemo(
-    () => (filter === 'all'
+  const items = useMemo(() => {
+    const base = filter === 'all'
       ? availableProducts
-      : availableProducts.filter((p) => (filter === 'equipment' ? p.kind === 'equipment' : p.kind !== 'equipment'))),
-    [availableProducts, filter],
-  )
+      : availableProducts.filter((p) => (filter === 'equipment' ? p.kind === 'equipment' : p.kind !== 'equipment'))
+
+    const query = search.trim().toLowerCase()
+    if (!query) return base
+
+    return base.filter((p) => {
+      const haystack = [
+        p.name,
+        p.assetId,
+        p.type,
+        p.breed,
+        p.kind,
+        p.details,
+      ].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [availableProducts, filter, search])
 
   const totalPages = Math.max(1, Math.ceil(items.length / PER_PAGE))
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
   }, [page, totalPages])
-  useEffect(() => setPage(1), [filter])
+  useEffect(() => setPage(1), [filter, search])
 
   const pageItems = useMemo(
     () => items.slice((page - 1) * PER_PAGE, page * PER_PAGE),
@@ -172,6 +187,16 @@ export default function ProductSelection() {
               ))}
             </div>
 
+            <div className="mb-6">
+              <label className="field-label">Search items</label>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by item name, asset ID, type or breed"
+                className="field-input"
+              />
+            </div>
+
             {multi && (
               <div className="mb-6 flex items-center gap-2 rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
                 <ShoppingCart className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -182,8 +207,12 @@ export default function ProductSelection() {
             {items.length === 0 ? (
               <EmptyState
                 icon={PackageOpen}
-                title="Nothing available in this category"
-                description="Try another category — there is still something waiting for a sponsor."
+                title={search ? 'No items matched your search' : 'Nothing available in this category'}
+                description={
+                  search
+                    ? 'Try another keyword or switch back to a broader category to find available sponsorships.'
+                    : 'Try another category — there is still something waiting for a sponsor.'
+                }
               />
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

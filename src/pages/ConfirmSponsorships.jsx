@@ -29,7 +29,7 @@ export default function ConfirmSponsorships() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const {
-    sponsorships, settings, productById, remainingOf, confirmSponsorship, cancelSponsorship, updateSponsorship, loading,
+    sponsorships, settings, productById, remainingOf, confirmSponsorship, cancelSponsorship, updateSponsorship, updateProduct, loading,
   } = useApp()
 
   const pending = useMemo(
@@ -50,24 +50,69 @@ export default function ConfirmSponsorships() {
   )
 
   const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
   const [modal, setModal] = useState({ open: false, sponsorship: null })
   const [recipient, setRecipient] = useState(EMPTY_RECIPIENT)
   const [errors, setErrors] = useState({})
+  const [editErrors, setEditErrors] = useState({})
   const [confirmingId, setConfirmingId] = useState(null)
   const [cancellingId, setCancellingId] = useState(null)
   const [recipientBusy, setRecipientBusy] = useState(false)
   const [editModal, setEditModal] = useState({ open: false, sponsorship: null })
-  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '', phone: '' })
+  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', email: '', phone: '', productName: '' })
   const [editBusy, setEditBusy] = useState(false)
 
-  const totalPages = Math.max(1, Math.ceil(pending.length / PER_PAGE))
+  const filteredPending = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return pending
+
+    return pending.filter((s) => {
+      const product = productById(s.productId)
+      const haystack = [
+        product?.name,
+        product?.assetId,
+        product?.type,
+        product?.breed,
+        fullName(s.donor),
+        s.donor?.email,
+        s.donor?.phone,
+        s.id,
+        s.productId,
+      ].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [pending, productById, search])
+
+  const filteredConfirmedInProgress = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return confirmedInProgress
+
+    return confirmedInProgress.filter((s) => {
+      const product = productById(s.productId)
+      const haystack = [
+        product?.name,
+        product?.assetId,
+        product?.type,
+        product?.breed,
+        fullName(s.donor),
+        s.donor?.email,
+        s.donor?.phone,
+        s.id,
+        s.productId,
+      ].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [confirmedInProgress, productById, search])
+
+  const totalPages = Math.max(1, Math.ceil(filteredPending.length / PER_PAGE))
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
   }, [page, totalPages])
+  useEffect(() => setPage(1), [search])
 
   const pageItems = useMemo(
-    () => pending.slice((page - 1) * PER_PAGE, page * PER_PAGE),
-    [pending, page],
+    () => filteredPending.slice((page - 1) * PER_PAGE, page * PER_PAGE),
+    [filteredPending, page],
   )
 
   const startConfirm = async (s) => {
@@ -183,11 +228,25 @@ export default function ConfirmSponsorships() {
       />
 
       <div className="container-x py-10 sm:py-12">
-        {pending.length === 0 ? (
+        <div className="mb-6">
+          <label className="field-label">Search sponsorships</label>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by sponsor, email, mobile, item or asset ID"
+            className="field-input"
+          />
+        </div>
+
+        {filteredPending.length === 0 ? (
           <EmptyState
             icon={ClipboardCheck}
-            title="Nothing awaiting confirmation"
-            description="When a sponsor completes the form, their contribution appears here for you to confirm."
+            title={search ? 'No sponsorships matched your search' : 'Nothing awaiting confirmation'}
+            description={
+              search
+                ? 'Try a different keyword or clear the search to view all pending sponsorships.'
+                : 'When a sponsor completes the form, their contribution appears here for you to confirm.'
+            }
             action={
               <button onClick={() => navigate('/select')} className="btn-primary btn-md">
                 Go to sponsorship selection
@@ -212,8 +271,10 @@ export default function ConfirmSponsorships() {
                     lastName: s.donor?.lastName || '',
                     email: s.donor?.email || '',
                     phone: s.donor?.phone || '',
+                    productName: productById(s.productId)?.name || '',
                   })
                   setEditModal({ open: true, sponsorship: s })
+                  setEditErrors({})
                 }}
                 confirming={confirmingId === s.id}
                 cancelling={cancellingId === s.id}
@@ -224,7 +285,7 @@ export default function ConfirmSponsorships() {
           </>
         )}
 
-        {confirmedInProgress.length > 0 && (
+        {filteredConfirmedInProgress.length > 0 && (
           <section className="mt-12">
             <h2 className="font-heading text-lg font-semibold text-pine">
               Confirmed, still collecting
@@ -234,7 +295,7 @@ export default function ConfirmSponsorships() {
               Sponsorships made once their full value is confirmed.
             </p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {confirmedInProgress.map((s) => (
+              {filteredConfirmedInProgress.map((s) => (
                 <ConfirmationCard
                   key={s.id}
                   sponsorship={s}
@@ -246,8 +307,10 @@ export default function ConfirmSponsorships() {
                       lastName: s.donor?.lastName || '',
                       email: s.donor?.email || '',
                       phone: s.donor?.phone || '',
+                      productName: productById(s.productId)?.name || '',
                     })
                     setEditModal({ open: true, sponsorship: s })
+                    setEditErrors({})
                   }}
                 />
               ))}
@@ -330,14 +393,20 @@ export default function ConfirmSponsorships() {
           const e = {}
           if (!editForm.firstName.trim()) e.firstName = 'First name is required.'
           if (!editForm.lastName.trim()) e.lastName = 'Last name is required.'
-          setErrors(e)
+          if (!editForm.productName.trim()) e.productName = 'Item name is required.'
+          setEditErrors(e)
           if (Object.keys(e).length) return
           setEditBusy(true)
           try {
+            const product = productById(editModal.sponsorship.productId)
+            const nextProductName = editForm.productName.trim()
+            if (product && nextProductName && product.name !== nextProductName) {
+              await updateProduct(product.id, { ...product, name: nextProductName })
+            }
             await updateSponsorship(editModal.sponsorship.id, { donor: {
               firstName: editForm.firstName.trim(), lastName: editForm.lastName.trim(), email: editForm.email.trim(), phone: editForm.phone.trim()
             } })
-            toast('Donor updated.')
+            toast('Donor and item details updated.')
             setEditModal({ open: false, sponsorship: null })
           } catch (err) {
             toast(err.message, { type: 'error', duration: 6000 })
@@ -346,9 +415,10 @@ export default function ConfirmSponsorships() {
           }
         }} noValidate className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <RField label="First name" value={editForm.firstName} onChange={(ev) => setEditForm((f) => ({ ...f, firstName: ev.target.value }))} error={errors.firstName} required />
-            <RField label="Last name" value={editForm.lastName} onChange={(ev) => setEditForm((f) => ({ ...f, lastName: ev.target.value }))} error={errors.lastName} required />
+            <RField label="First name" value={editForm.firstName} onChange={(ev) => setEditForm((f) => ({ ...f, firstName: ev.target.value }))} error={editErrors.firstName} required />
+            <RField label="Last name" value={editForm.lastName} onChange={(ev) => setEditForm((f) => ({ ...f, lastName: ev.target.value }))} error={editErrors.lastName} required />
           </div>
+          <RField label="Item name" value={editForm.productName} onChange={(ev) => setEditForm((f) => ({ ...f, productName: ev.target.value }))} error={editErrors.productName} required />
           <RField label="Mobile number" type="tel" value={editForm.phone} onChange={(ev) => setEditForm((f) => ({ ...f, phone: ev.target.value }))} />
           <RField label="Email" type="email" value={editForm.email} onChange={(ev) => setEditForm((f) => ({ ...f, email: ev.target.value }))} />
         </form>

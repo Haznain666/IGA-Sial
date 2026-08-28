@@ -369,8 +369,8 @@ export function AppProvider({ children }) {
       loading: state.productsLoading || state.sponsorshipsLoading || state.settingsLoading,
       ...actions,
       MAX_BANKS,
-      livestock: products.filter((p) => p.kind !== 'equipment'),
-      equipment: products.filter((p) => p.kind === 'equipment'),
+      livestock: products.filter((p) => p.kind !== 'equipment' && statOf(p.id).status !== 'sponsored'),
+      equipment: products.filter((p) => p.kind === 'equipment' && statOf(p.id).status !== 'sponsored'),
 
       statusOf: (id) => statOf(id).status,
       remainingOf: (id) => statOf(id).remaining,

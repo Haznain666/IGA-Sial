@@ -51,8 +51,29 @@ export default function ManageProduct() {
   const [tab, setTab] = useState('livestock')
   const [editor, setEditor] = useState({ open: false, id: null })
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [search, setSearch] = useState('')
 
   const list = tab === 'equipment' ? equipment : livestock
+  const filteredList = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return list
+
+    return list.filter((p) => {
+      const haystack = [
+        p.name,
+        p.assetId,
+        p.type,
+        p.breed,
+        p.kind,
+        p.details,
+        p.owner?.firstName,
+        p.owner?.lastName,
+        p.owner?.email,
+        p.owner?.phone,
+      ].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [list, search])
   const active = useMemo(() => TABS.find((t) => t.kind === tab), [tab])
   const editing = editor.id ? list.find((p) => p.id === editor.id) : null
 
@@ -105,6 +126,16 @@ export default function ManageProduct() {
           ))}
         </div>
 
+        <div className="mb-6">
+          <label className="field-label">Search products</label>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, asset ID, type, breed or owner"
+            className="field-input"
+          />
+        </div>
+
         {loading ? (
           <div className="py-12">
             <div className="container-x">
@@ -117,14 +148,16 @@ export default function ManageProduct() {
               </div>
             </div>
           </div>
-        ) : list.length === 0 ? (
+        ) : filteredList.length === 0 ? (
           <EmptyState
             icon={PackageSearch}
-            title={tab === 'equipment' ? 'No equipment yet' : 'No animals yet'}
+            title={search ? 'No products matched your search' : (tab === 'equipment' ? 'No equipment yet' : 'No animals yet')}
             description={
-              tab === 'equipment'
-                ? 'Add your first piece of equipment so sponsors can support the tools behind the herd.'
-                : 'Add your first animal profile to populate the herd and sponsorship pages.'
+              search
+                ? 'Try another keyword or clear the search to see the full list again.'
+                : (tab === 'equipment'
+                  ? 'Add your first piece of equipment so sponsors can support the tools behind the herd.'
+                  : 'Add your first animal profile to populate the herd and sponsorship pages.')
             }
             action={
               <button onClick={() => setEditor({ open: true, id: null })} className="btn-primary btn-md">
@@ -135,7 +168,7 @@ export default function ManageProduct() {
           />
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((p) => {
+            {filteredList.map((p) => {
               const locked = hasOpenSponsorships(p.id)
               return (
                 <ProductCard

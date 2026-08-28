@@ -152,7 +152,7 @@ export async function fetchProducts() {
   const data = unwrap(
     await supabase.from('products').select('*').order('created_at', { ascending: false }),
   )
-  return (data || []).map(toProduct)
+  return (data || []).filter((row) => !row.archived).map(toProduct)
 }
 
 export async function fetchSponsorships() {
@@ -197,7 +197,10 @@ export async function updateProduct(id, patch) {
 }
 
 export async function deleteProduct(id) {
-  unwrap(await supabase.from('products').delete().eq('id', id))
+  const data = unwrap(
+    await supabase.from('products').update({ archived: true }).eq('id', id).select().single(),
+  )
+  return toProduct(data)
 }
 
 // ---- sponsorships -----------------------------------------------------------
