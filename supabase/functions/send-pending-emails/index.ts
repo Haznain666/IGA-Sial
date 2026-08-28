@@ -10,7 +10,6 @@ serve(async (req) => {
     return Response.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
   }
 
-  const gmailUser = Deno.env.get('GMAIL_USER')
   const gmailAppPassword = Deno.env.get('GMAIL_APP_PASSWORD')
 
   if (!gmailAppPassword) {
@@ -46,10 +45,10 @@ serve(async (req) => {
   const client = new SMTPClient({
     connection: {
       hostname: 'smtp.gmail.com',
-      port: 587,
+      port: 465,
       tls: true,
       auth: {
-        username: gmailUser || 'IGASialFarm@gmail.com',
+        username: Deno.env.get('GMAIL_USER'),
         password: gmailAppPassword,
       },
     },
