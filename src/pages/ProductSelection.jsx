@@ -189,7 +189,7 @@ export default function ProductSelection() {
                 ))}
               </div>
 
-              <div className="relative w-full max-w-md xl:w-[320px]">
+              <div className="relative w-full max-w-md xl:w-[380px]">
                 <input
                   ref={searchInputRef}
                   value={search}
