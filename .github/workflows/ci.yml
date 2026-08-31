@@ -24,10 +24,8 @@ jobs:
 
       - name: Build
         env:
-          # Supabase env vars are injected at build time (Vite inlines import.meta.env at
-          # build, not at runtime). Repository secrets are used when available; otherwise
-          # this falls back to the placeholder values in .env.example so the build never
-          # breaks on a fork or a PR from an external contributor without repo secrets.
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co' }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_xxxxxxxxxxxxxxxxxxxx' }}
+          # Vite only inlines VITE_ variables into the browser bundle. Keep the
+          # public Supabase values under that prefix at build time.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://your-project.supabase.co' }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_xxxxxxxxxxxxxxxxxxxx' }}
         run: npm run build

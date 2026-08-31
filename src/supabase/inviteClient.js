@@ -22,8 +22,8 @@ import { createClient } from '@supabase/supabase-js'
 // out of the signed-in admin's session storage — inviting someone must never
 // touch who you are signed in as.
 // ---------------------------------------------------------------------------
-const url = import.meta.env.NEXT_PUBLIC_SUPABASE_URL
-const key = import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+const url = import.meta.env.VITE_SUPABASE_URL
+const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
 export const inviteClient = createClient(url || '', key || '', {
   auth: {

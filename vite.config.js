@@ -6,9 +6,8 @@ export default defineConfig({
   // GitHub Pages serves this repo from /IGA-Sial/, so CI sets BASE_PATH.
   // Local dev and any root-domain host (e.g. Hostinger) leave it unset.
   base: process.env.BASE_PATH || '/',
-  // This is a Vite app but the project's env vars use the NEXT_PUBLIC_ prefix,
-  // so both prefixes are exposed to client code via import.meta.env.
-  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
+  // Browser-side env vars must use the VITE_ prefix in a Vite app.
+  envPrefix: ['VITE_'],
   server: {
     port: 5180,
     host: true,

@@ -22,30 +22,19 @@ Two variables are required, both safe to expose in the browser bundle (Supabase
 
 | Variable | Purpose |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable (anon) API key |
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable (anon) API key |
 
 - Local dev/build: copy `.env.example` to `.env` and fill in real values (`.env` is
-  gitignored — see `D:\iga-sial-farm\.env` for the current project values).
-- CI/GitHub Actions: pulled from repository secrets `NEXT_PUBLIC_SUPABASE_URL` and
-  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (already set on `Haznain666/IGA-Sial`),
-  with a fallback to the placeholder values in `.env.example` so a fork/PR without
-  those secrets still builds.
+gitignored).
+- CI/GitHub Actions: pulled from repository secrets `VITE_SUPABASE_URL` and
+  `VITE_SUPABASE_PUBLISHABLE_KEY`.
 
-### Why `NEXT_PUBLIC_` works in a Vite app
+### Why `VITE_` is required in a Vite app
 
-This project's env vars are named with the `NEXT_PUBLIC_` prefix (a Next.js
-convention) even though it's a Vite app. Vite only exposes env vars to client code
-if their name starts with an allow-listed prefix (`VITE_` by default). `vite.config.js`
-explicitly extends that allow-list:
-
-```js
-envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
-```
-
-So both `VITE_*` and `NEXT_PUBLIC_*` vars get inlined into `import.meta.env` and are
-available to the app at build time. No other Next.js-specific behavior is in play —
-this is a plain Vite/React SPA.
+This is a plain Vite/React SPA. Vite only exposes client-side env vars whose names
+start with `VITE_`, so the browser bundle can only read `import.meta.env.VITE_*`.
+The app must not rely on any non-`VITE_` names in the browser code.
 
 ### Supabase project
 

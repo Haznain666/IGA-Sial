@@ -26,6 +26,7 @@ const EMPTY_SETTINGS = {
 }
 
 const AppContext = createContext(null)
+let appBootstrapped = false
 
 export function useApp() {
   const ctx = useContext(AppContext)
@@ -118,37 +119,70 @@ export function AppProvider({ children }) {
   }))
   const stateRef = useRef(state)
   stateRef.current = state
+  const loadSeq = useRef(0)
+  const inflight = useRef({ products: false, sponsorships: false, settings: false })
 
   const reloadProducts = useCallback(async () => {
+    if (inflight.current.products) return
+    inflight.current.products = true
+    const seq = ++loadSeq.current
     try {
-      dispatch({ type: 'SET_PRODUCTS', products: await api.fetchProducts() })
+      const products = await api.fetchProducts()
+      if (seq !== loadSeq.current) return
+      dispatch({ type: 'SET_PRODUCTS', products })
     } catch (e) {
       console.error('Could not load products:', e)
-      dispatch({ type: 'SET_PRODUCTS', products: stateRef.current.products })
+      if (seq === loadSeq.current) {
+        dispatch({ type: 'SET_PRODUCTS', products: stateRef.current.products })
+      }
+    } finally {
+      inflight.current.products = false
     }
   }, [])
 
   const reloadSponsorships = useCallback(async () => {
+    if (inflight.current.sponsorships) return
+    inflight.current.sponsorships = true
+    const seq = ++loadSeq.current
     try {
-      dispatch({ type: 'SET_SPONSORSHIPS', sponsorships: await api.fetchSponsorships() })
+      const sponsorships = await api.fetchSponsorships()
+      if (seq !== loadSeq.current) return
+      dispatch({ type: 'SET_SPONSORSHIPS', sponsorships })
     } catch (e) {
       console.error('Could not load sponsorships:', e)
-      dispatch({ type: 'SET_SPONSORSHIPS', sponsorships: stateRef.current.sponsorships })
+      if (seq === loadSeq.current) {
+        dispatch({ type: 'SET_SPONSORSHIPS', sponsorships: stateRef.current.sponsorships })
+      }
+    } finally {
+      inflight.current.sponsorships = false
     }
   }, [])
 
   const reloadSettings = useCallback(async () => {
+    if (inflight.current.settings) return
+    inflight.current.settings = true
+    const seq = ++loadSeq.current
     try {
-      dispatch({ type: 'SET_SETTINGS', settings: await api.fetchSettings() })
+      const settings = await api.fetchSettings()
+      if (seq !== loadSeq.current) return
+      dispatch({ type: 'SET_SETTINGS', settings })
     } catch (e) {
       console.error('Could not load settings:', e)
-      dispatch({ type: 'SET_SETTINGS', settings: stateRef.current.settings })
+      if (seq === loadSeq.current) {
+        dispatch({ type: 'SET_SETTINGS', settings: stateRef.current.settings })
+      }
+    } finally {
+      inflight.current.settings = false
     }
   }, [])
 
-  // Initial load + realtime subscriptions. An admin change lands on every
-  // visitor's screen, the way the old Firestore listeners behaved.
+  // Initial load + realtime subscriptions. React StrictMode intentionally
+  // re-mounts components in development, so guard the boot sequence at module
+  // scope to avoid duplicate fetches and timeout spikes.
   useEffect(() => {
+    if (appBootstrapped) return undefined
+    appBootstrapped = true
+
     reloadProducts()
     reloadSponsorships()
     reloadSettings()

@@ -69,8 +69,8 @@ npm run build        # production build -> dist/
 npm run preview      # preview the built dist
 ```
 
-- Env (`.env`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-  `vite.config.js` sets `envPrefix: ['VITE_', 'NEXT_PUBLIC_']` so `import.meta.env.NEXT_PUBLIC_*` works.
+- Env (`.env`): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`.
+  `vite.config.js` exposes only the browser-safe `VITE_` prefix, so the app reads those values via `import.meta.env.VITE_*`.
 - Browser-preview launcher entry: **`iga-dev`** (`.claude/launch.json`).
 
 **Deploy — see `DEPLOY.md` for the full runbook.**

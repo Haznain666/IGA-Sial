@@ -2,8 +2,8 @@
 // the committed migration always matches reality. Run: node scripts/dump-seed.mjs
 import { writeFileSync } from 'node:fs'
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://befqbzgoygekawcguzrz.supabase.co'
-const KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_HvqFNZGsHk84BIvwwk2TUQ_orHGIlD7'
+const URL = process.env.VITE_SUPABASE_URL || 'https://befqbzgoygekawcguzrz.supabase.co'
+const KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_HvqFNZGsHk84BIvwwk2TUQ_orHGIlD7'
 const h = { apikey: KEY, Authorization: `Bearer ${KEY}` }
 
 const q = (v) => (v === null || v === undefined ? 'null' : `'${String(v).replace(/'/g, "''")}'`)

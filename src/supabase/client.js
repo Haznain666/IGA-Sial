@@ -1,13 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Env vars use the NEXT_PUBLIC_ prefix; vite.config.js exposes that prefix so
-// `import.meta.env.NEXT_PUBLIC_*` resolves at build time.
-const url = import.meta.env.NEXT_PUBLIC_SUPABASE_URL
-const key = import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+// Vite exposes only VITE_ variables to the browser bundle, so keep the client
+// keys under that prefix for build-time inlining.
+const url = import.meta.env.VITE_SUPABASE_URL
+const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
 if (!url || !key) {
   // Loud, early failure — the app has no localStorage fallback any more.
-  console.error('Supabase env vars are missing. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.')
+  console.error('Supabase env vars are missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.')
 }
 
 export const supabase = createClient(url || '', key || '', {

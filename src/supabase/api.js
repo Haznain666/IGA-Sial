@@ -149,17 +149,18 @@ function missingFunction(error) {
 
 // ---- reads ------------------------------------------------------------------
 export async function fetchProducts() {
-  const data = unwrap(
-    await supabase.from('products').select('*').order('created_at', { ascending: false }),
-  )
-  return (data || []).filter((row) => !row.archived).map(toProduct)
+  const data = unwrap(await supabase.from('products').select('*'))
+  return (data || [])
+    .filter((row) => !row.archived)
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    .map(toProduct)
 }
 
 export async function fetchSponsorships() {
-  const data = unwrap(
-    await supabase.from('sponsorships').select('*').order('reserved_at', { ascending: false }),
-  )
-  return (data || []).map(toSponsorship)
+  const data = unwrap(await supabase.from('sponsorships').select('*'))
+  return (data || [])
+    .sort((a, b) => new Date(b.reserved_at || 0) - new Date(a.reserved_at || 0))
+    .map(toSponsorship)
 }
 
 export async function fetchSettings() {
