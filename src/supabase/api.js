@@ -148,12 +148,23 @@ function missingFunction(error) {
 }
 
 // ---- reads ------------------------------------------------------------------
+const PRODUCT_SELECT = 'id,kind,name,details,asset_id,value_pkr,breed,age,weight,type,owner,warranty,life_span,archived,created_at'
+
+function sanitizeImages(input) {
+  const list = Array.isArray(input) ? input : []
+  return list.filter((img) => {
+    if (typeof img === 'string') return !img.startsWith('data:image/')
+    if (img && typeof img.url === 'string') return !img.url.startsWith('data:image/')
+    return true
+  })
+}
+
 export async function fetchProducts() {
-  const data = unwrap(await supabase.from('products').select('*'))
+  const data = unwrap(await supabase.from('products').select(PRODUCT_SELECT))
   return (data || [])
     .filter((row) => !row.archived)
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-    .map(toProduct)
+    .map((row) => ({ ...toProduct(row), images: sanitizeImages(row.images || []) }))
 }
 
 export async function fetchSponsorships() {
