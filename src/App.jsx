@@ -4,6 +4,7 @@ import Header from './components/Header.jsx'
 import Footer from './components/Footer.jsx'
 import ScrollToTop from './components/ScrollToTop.jsx'
 import WhatsAppButton from './components/WhatsAppButton.jsx'
+import { useApp } from './store/AppContext.jsx'
 import Home from './pages/Home.jsx'
 import ProductSelection from './pages/ProductSelection.jsx'
 import SponsorPage from './pages/SponsorPage.jsx'
@@ -45,37 +46,47 @@ function Loading() {
   )
 }
 
+function AppRoutes() {
+  const { loading } = useApp()
+
+  if (loading) return <Loading />
+
+  return (
+    <Suspense fallback={<Loading />}>
+      <Routes>
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/select" element={<ProductSelection />} />
+          <Route path="/sponsor" element={<SponsorPage />} />
+          <Route path="/sponsored" element={<Sponsored />} />
+          {/* Old link kept alive so bookmarks and shared URLs still land. */}
+          <Route path="/donation" element={<Navigate to="/sponsor" replace />} />
+          <Route path="/thank-you" element={<ThankYou />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/set-password" element={<SetPassword />} />
+
+        <Route path="/super-admin" element={<SuperAdminLayout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="products" element={<ManageProduct />} />
+          <Route path="confirmations" element={<ConfirmSponsorships />} />
+          <Route path="sponsorships" element={<SponsorshipsMade />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="admin-users" element={<AdminUsers />} />
+          <Route path="*" element={<Dashboard />} />
+        </Route>
+      </Routes>
+    </Suspense>
+  )
+}
+
 export default function App() {
   return (
     <>
       <ScrollToTop />
-      <Suspense fallback={<Loading />}>
-        <Routes>
-          <Route element={<PublicLayout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/select" element={<ProductSelection />} />
-            <Route path="/sponsor" element={<SponsorPage />} />
-            <Route path="/sponsored" element={<Sponsored />} />
-            {/* Old link kept alive so bookmarks and shared URLs still land. */}
-            <Route path="/donation" element={<Navigate to="/sponsor" replace />} />
-            <Route path="/thank-you" element={<ThankYou />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/set-password" element={<SetPassword />} />
-
-          <Route path="/super-admin" element={<SuperAdminLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="products" element={<ManageProduct />} />
-            <Route path="confirmations" element={<ConfirmSponsorships />} />
-            <Route path="sponsorships" element={<SponsorshipsMade />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="admin-users" element={<AdminUsers />} />
-            <Route path="*" element={<Dashboard />} />
-          </Route>
-        </Routes>
-      </Suspense>
+      <AppRoutes />
     </>
   )
 }
