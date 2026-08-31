@@ -148,23 +148,17 @@ function missingFunction(error) {
 }
 
 // ---- reads ------------------------------------------------------------------
-const PRODUCT_SELECT = 'id,kind,name,details,asset_id,value_pkr,breed,age,weight,type,owner,warranty,life_span,archived,created_at'
-
-function sanitizeImages(input) {
-  const list = Array.isArray(input) ? input : []
-  return list.filter((img) => {
-    if (typeof img === 'string') return !img.startsWith('data:image/')
-    if (img && typeof img.url === 'string') return !img.url.startsWith('data:image/')
-    return true
-  })
-}
+// The full images JSON can contain several megabytes of base64 data per row.
+// Fetch only the first image for the listing; it is enough for cards and avoids
+// timing out the public products request.
+const PRODUCT_SELECT = 'id,kind,name,details,asset_id,value_pkr,breed,age,weight,type,owner,warranty,life_span,archived,created_at,images->0'
 
 export async function fetchProducts() {
   const data = unwrap(await supabase.from('products').select(PRODUCT_SELECT))
   return (data || [])
     .filter((row) => !row.archived)
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-    .map((row) => ({ ...toProduct(row), images: sanitizeImages(row.images || []) }))
+    .map((row) => ({ ...toProduct(row), images: row.images ? [row.images] : [] }))
 }
 
 export async function fetchSponsorships() {
@@ -272,18 +266,21 @@ export async function updateSponsorship(id, patch) {
 // should read from `inbox_entries` and deliver messages. This avoids
 // embedding SMTP secrets in the client and lets the server send mail from
 // the configured address (e.g. IGASialFarm@gmail.com).
-export async function createInboxEntry(entry) {
-  // entry: { to, subject, body, sponsorshipId }
-  const row = {
+export async function createInboxEntries(entries) {
+  const rows = entries.map((entry) => ({
     to_address: entry.to,
     subject: entry.subject,
     body: entry.body,
     from_address: entry.from || 'IGASialFarm@gmail.com',
     sponsorship_id: entry.sponsorshipId || null,
     created_at: new Date().toISOString(),
-  }
-  const data = unwrap(await supabase.from('inbox_entries').insert(row).select().single())
-  return data
+  }))
+  if (rows.length === 0) return
+  unwrap(await supabase.from('inbox_entries').insert(rows))
+}
+
+export async function createInboxEntry(entry) {
+  await createInboxEntries([entry])
 }
 
 // ---- settings ---------------------------------------------------------------

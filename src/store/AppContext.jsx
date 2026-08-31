@@ -119,20 +119,20 @@ export function AppProvider({ children }) {
   }))
   const stateRef = useRef(state)
   stateRef.current = state
-  const loadSeq = useRef(0)
+  const loadSeq = useRef({ products: 0, sponsorships: 0, settings: 0 })
   const inflight = useRef({ products: false, sponsorships: false, settings: false })
 
   const reloadProducts = useCallback(async () => {
     if (inflight.current.products) return
     inflight.current.products = true
-    const seq = ++loadSeq.current
+    const seq = ++loadSeq.current.products
     try {
       const products = await api.fetchProducts()
-      if (seq !== loadSeq.current) return
+      if (seq !== loadSeq.current.products) return
       dispatch({ type: 'SET_PRODUCTS', products })
     } catch (e) {
       console.error('Could not load products:', e)
-      if (seq === loadSeq.current) {
+      if (seq === loadSeq.current.products) {
         dispatch({ type: 'SET_PRODUCTS', products: stateRef.current.products })
       }
     } finally {
@@ -143,14 +143,14 @@ export function AppProvider({ children }) {
   const reloadSponsorships = useCallback(async () => {
     if (inflight.current.sponsorships) return
     inflight.current.sponsorships = true
-    const seq = ++loadSeq.current
+    const seq = ++loadSeq.current.sponsorships
     try {
       const sponsorships = await api.fetchSponsorships()
-      if (seq !== loadSeq.current) return
+      if (seq !== loadSeq.current.sponsorships) return
       dispatch({ type: 'SET_SPONSORSHIPS', sponsorships })
     } catch (e) {
       console.error('Could not load sponsorships:', e)
-      if (seq === loadSeq.current) {
+      if (seq === loadSeq.current.sponsorships) {
         dispatch({ type: 'SET_SPONSORSHIPS', sponsorships: stateRef.current.sponsorships })
       }
     } finally {
@@ -161,14 +161,14 @@ export function AppProvider({ children }) {
   const reloadSettings = useCallback(async () => {
     if (inflight.current.settings) return
     inflight.current.settings = true
-    const seq = ++loadSeq.current
+    const seq = ++loadSeq.current.settings
     try {
       const settings = await api.fetchSettings()
-      if (seq !== loadSeq.current) return
+      if (seq !== loadSeq.current.settings) return
       dispatch({ type: 'SET_SETTINGS', settings })
     } catch (e) {
       console.error('Could not load settings:', e)
-      if (seq === loadSeq.current) {
+      if (seq === loadSeq.current.settings) {
         dispatch({ type: 'SET_SETTINGS', settings: stateRef.current.settings })
       }
     } finally {
@@ -305,6 +305,32 @@ export function AppProvider({ children }) {
         dispatch({ type: 'CART_CLEAR' })
         await reloadSponsorships()
         await reloadProducts()
+
+        const productNames = items
+          .map((item) => stateRef.current.products.find((product) => product.id === item.productId)?.name || item.productId)
+          .join(', ')
+        const total = items.reduce((sum, item) => sum + Number(item.amountPKR || 0), 0)
+        const adminEmail = 'IGASialFarm@gmail.com'
+        const subject = `New sponsorship request — ${productNames}`
+        const body = [
+          `A new sponsorship request has been received from ${donor.firstName} ${donor.lastName}.`,
+          '',
+          `Items: ${productNames}`,
+          `Amount: ${formatMoney(total, 'PKR')}`,
+          `Donor email: ${donor.email}`,
+          `Donor phone: ${donor.phone}`,
+          '',
+          'Please sign in to the admin panel to review and confirm the request.',
+        ].join('\n')
+        try {
+          await api.createInboxEntries([
+            { to: donor.email, subject: 'We received your sponsorship request', body },
+            { to: adminEmail, subject, body },
+          ])
+        } catch (e) {
+          console.error('Could not queue sponsorship emails:', e)
+        }
+
         return created
       },
       confirmSponsorship: async (id, recipient) => {

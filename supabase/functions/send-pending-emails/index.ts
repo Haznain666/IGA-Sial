@@ -11,9 +11,10 @@ serve(async (req) => {
   }
 
   const gmailAppPassword = Deno.env.get('GMAIL_APP_PASSWORD')
+  const gmailUser = Deno.env.get('GMAIL_USER')
 
-  if (!gmailAppPassword) {
-    return Response.json({ ok: false, error: 'GMAIL_APP_PASSWORD not set yet' }, { status: 500 })
+  if (!gmailUser || !gmailAppPassword) {
+    return Response.json({ ok: false, error: 'GMAIL_USER and GMAIL_APP_PASSWORD must be set' }, { status: 500 })
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
@@ -47,8 +48,8 @@ serve(async (req) => {
       hostname: 'smtp.gmail.com',
       port: 465,
       tls: true,
-      auth: {
-        username: Deno.env.get('GMAIL_USER'),
+        auth: {
+          username: gmailUser,
         password: gmailAppPassword,
       },
     },
@@ -84,7 +85,10 @@ serve(async (req) => {
 })
 
 async function markSent(supabase, id) {
-  const { error } = await supabase.from('inbox_entries').update({ status: 'sent', error_message: null }).eq('id', id)
+  const { error } = await supabase
+    .from('inbox_entries')
+    .update({ status: 'sent', error_message: null, sent_at: new Date().toISOString() })
+    .eq('id', id)
   if (error) {
     // Fallback if the error_message column is absent in the user's configured schema.
     await supabase.from('inbox_entries').update({ status: 'sent' }).eq('id', id)
