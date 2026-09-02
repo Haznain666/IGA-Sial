@@ -1,0 +1,1 @@
+import{u,j as e,m as a}from"./motion-D0Bp9noE.js";function d({children:i,delay:o=0,y:r=18,className:t,once:n=!0}){return u()?e.jsx("div",{className:t,children:i}):e.jsx(a.div,{className:t,initial:{opacity:0,y:r},whileInView:{opacity:1,y:0},viewport:{once:n,margin:"-60px"},transition:{duration:.6,delay:o,ease:[.22,1,.36,1]},children:i})}export{d as R};
