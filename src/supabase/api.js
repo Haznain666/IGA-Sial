@@ -148,17 +148,17 @@ function missingFunction(error) {
 }
 
 // ---- reads ------------------------------------------------------------------
-// The full images JSON can contain several megabytes of base64 data per row.
-// Fetch only the first image for the listing; it is enough for cards and avoids
-// timing out the public products request.
-const PRODUCT_SELECT = 'id,kind,name,details,asset_id,value_pkr,breed,age,weight,type,owner,warranty,life_span,archived,created_at,images->0'
+// Keep the complete product record in client state. Admin edits send the current
+// product object back to Supabase, so projecting only images->0 here would
+// silently overwrite every additional image whenever an item is edited.
+const PRODUCT_SELECT = 'id,kind,name,details,asset_id,value_pkr,breed,age,weight,type,owner,warranty,life_span,archived,created_at,images'
 
 export async function fetchProducts() {
   const data = unwrap(await supabase.from('products').select(PRODUCT_SELECT))
   return (data || [])
     .filter((row) => !row.archived)
     .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-    .map((row) => ({ ...toProduct(row), images: row.images ? [row.images] : [] }))
+    .map(toProduct)
 }
 
 export async function fetchSponsorships() {

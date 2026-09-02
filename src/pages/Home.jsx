@@ -1,17 +1,23 @@
-import Hero from '../sections/Hero.jsx'
-import About from '../sections/About.jsx'
-import Concept from '../sections/Concept.jsx'
-import Highlights from '../sections/Highlights.jsx'
-import Process from '../sections/Process.jsx'
-import Herd from '../sections/Herd.jsx'
-import Equipment from '../sections/Equipment.jsx'
-import Transparency from '../sections/Transparency.jsx'
-import MasterPlan from '../sections/MasterPlan.jsx'
-import Contact from '../sections/Contact.jsx'
+import { Suspense, lazy } from 'react'
+
+const Hero = lazy(() => import('../sections/Hero.jsx'))
+const About = lazy(() => import('../sections/About.jsx'))
+const Concept = lazy(() => import('../sections/Concept.jsx'))
+const Highlights = lazy(() => import('../sections/Highlights.jsx'))
+const Process = lazy(() => import('../sections/Process.jsx'))
+const Herd = lazy(() => import('../sections/Herd.jsx'))
+const Equipment = lazy(() => import('../sections/Equipment.jsx'))
+const Transparency = lazy(() => import('../sections/Transparency.jsx'))
+const MasterPlan = lazy(() => import('../sections/MasterPlan.jsx'))
+const Contact = lazy(() => import('../sections/Contact.jsx'))
+
+function SectionFallback() {
+  return <div className="h-40 w-full animate-pulse rounded-2xl bg-sand" />
+}
 
 export default function Home() {
   return (
-    <>
+    <Suspense fallback={<SectionFallback />}>
       <Hero />
       <About />
       <Concept />
@@ -22,6 +28,6 @@ export default function Home() {
       <Transparency />
       <MasterPlan />
       <Contact />
-    </>
+    </Suspense>
   )
 }

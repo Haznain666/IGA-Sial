@@ -7,7 +7,7 @@ import CurrencyPills from '../components/CurrencyPills.jsx'
 import PartialChips from '../components/PartialChips.jsx'
 import { useApp } from '../store/AppContext.jsx'
 import { useToast } from '../store/ToastContext.jsx'
-import { formatMoney } from '../lib/currency.js'
+import { formatAmountInput, formatMoney, parseAmountInput } from '../lib/currency.js'
 import { isEmail, isPhone } from '../lib/helpers.js'
 import { imageUrl } from '../lib/images.js'
 
@@ -46,7 +46,7 @@ export default function SponsorPage() {
     const remaining = remainingOf(p.id)
     const entry = entryFor(p)
     if (!entry.partial) return remaining
-    const n = Number(entry.value)
+    const n = Number(parseAmountInput(entry.value))
     return Number.isFinite(n) ? n : 0
   }
   const total = items.reduce((sum, p) => sum + amountFor(p), 0)
@@ -64,7 +64,7 @@ export default function SponsorPage() {
     items.forEach((p) => {
       if (!entryFor(p).partial) return
       const remaining = remainingOf(p.id)
-      const n = Number(entryFor(p).value)
+      const n = Number(parseAmountInput(entryFor(p).value))
       if (!Number.isFinite(n) || n <= 0) e[`amt_${p.id}`] = 'Enter an amount greater than zero.'
       else if (n > remaining) e[`amt_${p.id}`] = `That is more than the ${formatMoney(remaining, 'PKR')} still open.`
     })
@@ -358,7 +358,7 @@ export default function SponsorPage() {
                             onClick={() =>
                               setPartial(p.id, {
                                 partial: !entry.partial,
-                                value: !entry.partial ? String(remaining) : '',
+                                value: !entry.partial ? formatAmountInput(String(remaining)) : '',
                               })
                             }
                             className={`relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
@@ -388,15 +388,15 @@ export default function SponsorPage() {
                               </span>
                               <input
                                 id={`amount-${p.id}`}
-                                type="number"
-                                min="1"
-                                max={remaining}
-                                step="500"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9,]*"
                                 value={entry.value}
                                 onChange={(e) => {
-                                  setPartial(p.id, { value: e.target.value })
+                                  setPartial(p.id, { value: formatAmountInput(e.target.value) })
                                   if (amountError) setErrors((er) => ({ ...er, [`amt_${p.id}`]: undefined }))
                                 }}
+                                onWheel={(e) => e.preventDefault()}
                                 aria-invalid={!!amountError}
                                 className={`field-input pl-9 ${amountError ? 'field-input-invalid' : ''}`}
                               />

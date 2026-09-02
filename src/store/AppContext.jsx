@@ -121,6 +121,7 @@ export function AppProvider({ children }) {
   stateRef.current = state
   const loadSeq = useRef({ products: 0, sponsorships: 0, settings: 0 })
   const inflight = useRef({ products: false, sponsorships: false, settings: false })
+  const queuedReloads = useRef({ products: null, sponsorships: null, settings: null })
 
   const reloadProducts = useCallback(async () => {
     if (inflight.current.products) return
@@ -176,6 +177,15 @@ export function AppProvider({ children }) {
     }
   }, [])
 
+  const scheduleReload = useCallback((key) => {
+    if (queuedReloads.current[key]) clearTimeout(queuedReloads.current[key])
+    queuedReloads.current[key] = setTimeout(() => {
+      if (key === 'products') reloadProducts()
+      else if (key === 'sponsorships') reloadSponsorships()
+      else if (key === 'settings') reloadSettings()
+    }, 200)
+  }, [reloadProducts, reloadSponsorships, reloadSettings])
+
   // Initial load + realtime subscriptions. React StrictMode intentionally
   // re-mounts components in development, so guard the boot sequence at module
   // scope to avoid duplicate fetches and timeout spikes.
@@ -187,12 +197,12 @@ export function AppProvider({ children }) {
     reloadSponsorships()
     reloadSettings()
     const unsubs = [
-      api.subscribeProducts(reloadProducts),
-      api.subscribeSponsorships(reloadSponsorships),
-      api.subscribeSettings(reloadSettings),
+      api.subscribeProducts(() => scheduleReload('products')),
+      api.subscribeSponsorships(() => scheduleReload('sponsorships')),
+      api.subscribeSettings(() => scheduleReload('settings')),
     ]
     return () => unsubs.forEach((u) => u && u())
-  }, [reloadProducts, reloadSponsorships, reloadSettings])
+  }, [reloadProducts, reloadSponsorships, reloadSettings, scheduleReload])
 
   // Auth session (Super Admin gate)
   useEffect(() => {
@@ -311,8 +321,8 @@ export function AppProvider({ children }) {
           .join(', ')
         const total = items.reduce((sum, item) => sum + Number(item.amountPKR || 0), 0)
         const adminEmail = 'IGASialFarm@gmail.com'
-        const subject = `New sponsorship request — ${productNames}`
-        const body = [
+        const adminSubject = `New sponsorship request — ${productNames}`
+        const adminBody = [
           `A new sponsorship request has been received from ${donor.firstName} ${donor.lastName}.`,
           '',
           `Items: ${productNames}`,
@@ -322,11 +332,25 @@ export function AppProvider({ children }) {
           '',
           'Please sign in to the admin panel to review and confirm the request.',
         ].join('\n')
+        const donorSubject = 'Thank you for your sponsorship request'
+        const donorBody = [
+          `Dear ${donor.firstName},`,
+          '',
+          'Thank you for your sponsorship request. We have received it and our team will review it shortly.',
+          '',
+          `Items: ${productNames}`,
+          `Amount: ${formatMoney(total, 'PKR')}`,
+          '',
+          'We will update you once your sponsorship is confirmed.',
+          '',
+          'Warm regards,',
+          'IGA Sial Farm',
+        ].join('\n')
         try {
-          await api.createInboxEntries([
-            { to: donor.email, subject: 'We received your sponsorship request', body },
-            { to: adminEmail, subject, body },
-          ])
+          const queued = []
+          if (donor.email) queued.push({ to: donor.email, subject: donorSubject, body: donorBody })
+          queued.push({ to: adminEmail, subject: adminSubject, body: adminBody })
+          await api.createInboxEntries(queued)
         } catch (e) {
           console.error('Could not queue sponsorship emails:', e)
         }

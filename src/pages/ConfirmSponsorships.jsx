@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  BadgeCheck, XCircle, User2, Mail, Phone, Clock, ClipboardCheck, Timer, HandCoins, Wrench, Beef,
+  BadgeCheck, XCircle, ClipboardCheck, Wrench,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
@@ -11,7 +11,7 @@ import { useApp } from '../store/AppContext.jsx'
 import { useToast } from '../store/ToastContext.jsx'
 import { fullName, formatDateTime, formatCNIC, formatMobile } from '../lib/helpers.js'
 import { formatMoney } from '../lib/currency.js'
-import { imageUrl, imageStyle } from '../lib/images.js'
+import SponsorshipSummaryCard from '../components/SponsorshipSummaryCard.jsx'
 
 const PER_PAGE = 6
 const EMPTY_RECIPIENT = { firstName: '', lastName: '', cnic: '', phone: '', email: '' }
@@ -103,6 +103,38 @@ export default function ConfirmSponsorships() {
       return haystack.includes(query)
     })
   }, [confirmedInProgress, productById, search])
+
+  const confirmedGroups = useMemo(() => {
+    const groups = new Map()
+    for (const s of confirmedInProgress) {
+      if (!groups.has(s.productId)) {
+        groups.set(s.productId, {
+          productId: s.productId,
+          product: productById(s.productId),
+          remaining: remainingOf(s.productId),
+          sponsors: [],
+        })
+      }
+      groups.get(s.productId).sponsors.push(s)
+    }
+    return Array.from(groups.values())
+  }, [confirmedInProgress, productById, remainingOf])
+
+  const filteredConfirmedGroups = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return confirmedGroups
+
+    return confirmedGroups.filter(({ product, sponsors }) => {
+      const haystack = [
+        product?.name,
+        product?.assetId,
+        product?.type,
+        product?.breed,
+        ...sponsors.map((s) => [fullName(s.donor), s.donor?.email, s.donor?.phone, formatMoney(s.amountPKR, 'PKR')].filter(Boolean).join(' ')),
+      ].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [confirmedGroups, productById, search])
 
   const totalPages = Math.max(1, Math.ceil(filteredPending.length / PER_PAGE))
   useEffect(() => {
@@ -285,7 +317,7 @@ export default function ConfirmSponsorships() {
           </>
         )}
 
-        {filteredConfirmedInProgress.length > 0 && (
+        {filteredConfirmedGroups.length > 0 && (
           <section className="mt-12">
             <h2 className="font-heading text-lg font-semibold text-pine">
               Confirmed, still collecting
@@ -295,23 +327,24 @@ export default function ConfirmSponsorships() {
               Sponsorships made once their full value is confirmed.
             </p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredConfirmedInProgress.map((s) => (
-                <ConfirmationCard
-                  key={s.id}
-                  sponsorship={s}
-                  product={productById(s.productId)}
-                  remaining={remainingOf(s.productId)}
-                  onEdit={() => {
+              {filteredConfirmedGroups.map(({ product, sponsors, remaining, productId }) => (
+                <ConfirmedGroupCard
+                  key={productId}
+                  product={product}
+                  remaining={remaining}
+                  sponsors={sponsors}
+                  onEdit={sponsors[0] ? () => {
+                    const s = sponsors[0]
                     setEditForm({
                       firstName: s.donor?.firstName || '',
                       lastName: s.donor?.lastName || '',
                       email: s.donor?.email || '',
                       phone: s.donor?.phone || '',
-                      productName: productById(s.productId)?.name || '',
+                      productName: product?.name || '',
                     })
                     setEditModal({ open: true, sponsorship: s })
                     setEditErrors({})
-                  }}
+                  } : undefined}
                 />
               ))}
             </div>
@@ -430,102 +463,13 @@ export default function ConfirmSponsorships() {
 // Deliberately compact: no hero image and no lightbox — just thumbnails that
 // magnify on hover, so a long queue stays scannable.
 function ConfirmationCard({ sponsorship: s, product, remaining, holdLabel, onConfirm, onCancel, onEdit, confirming = false, cancelling = false }) {
-  const [preview, setPreview] = useState(null)
-  const images = product?.images || []
-  const isEquipment = product?.kind === 'equipment'
-  const Icon = isEquipment ? Wrench : Beef
-  const donor = s.donor
-
   return (
-    <article className="card flex flex-col p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate font-heading text-base font-semibold text-pine">
-            {product?.name || 'Unknown item'}
-          </h3>
-          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink/50">
-            <Icon className="h-3.5 w-3.5 shrink-0 text-brand-500" aria-hidden="true" />
-            {isEquipment ? 'Equipment' : product?.type || 'Live Stock'}
-          </p>
-        </div>
-        {s.isPartial && (
-          <span className="chip shrink-0 bg-gold-100 text-[11px] font-semibold text-gold-800">
-            <HandCoins className="h-3.5 w-3.5" aria-hidden="true" />
-            Partial
-          </span>
-        )}
-      </div>
-
-      {/* Thumbnails with hover magnifier */}
-      <div className="relative mt-3 flex gap-1.5">
-        {images.slice(0, 5).map((img, i) => (
-          <button
-            key={i}
-            type="button"
-            onMouseEnter={() => setPreview(i)}
-            onMouseLeave={() => setPreview(null)}
-            onFocus={() => setPreview(i)}
-            onBlur={() => setPreview(null)}
-            className="h-11 w-9 shrink-0 overflow-hidden rounded-lg border border-black/5 transition-transform hover:scale-105"
-            aria-label={`Preview photo ${i + 1}`}
-          >
-            <img src={imageUrl(img)} alt="" loading="lazy" className="h-full w-full object-cover" />
-          </button>
-        ))}
-        {preview !== null && images[preview] && (
-          <div className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 h-56 w-[180px] overflow-hidden rounded-2xl border border-black/10 bg-sand shadow-lift">
-            <img
-              src={imageUrl(images[preview])}
-              alt=""
-              style={imageStyle(images[preview])}
-              className="h-full w-full object-cover"
-            />
-          </div>
-        )}
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="font-heading text-lg font-semibold tabular-nums text-brand-600">
-          {formatMoney(s.amountPKR, 'PKR')}
-        </span>
-        <span className="text-xs text-ink/45">of {formatMoney(product?.valuePKR || 0, 'PKR')}</span>
-        {remaining > 0 && (
-          <span className="text-xs font-medium text-ink/55">· {formatMoney(remaining, 'PKR')} still open</span>
-        )}
-      </div>
-
-      <div className="mt-3 rounded-xl bg-parchment p-3 text-sm">
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-ink/45">Sponsor</p>
-        <p className="flex items-center gap-1.5 truncate font-medium text-ink">
-          <User2 className="h-3.5 w-3.5 shrink-0 text-brand-500" aria-hidden="true" />
-          {fullName(donor) || '—'}
-        </p>
-        {donor?.email && (
-          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink/60">
-            <Mail className="h-3.5 w-3.5 shrink-0 text-brand-400" aria-hidden="true" />
-            {donor.email}
-          </p>
-        )}
-        {donor?.phone && (
-          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink/60">
-            <Phone className="h-3.5 w-3.5 shrink-0 text-brand-400" aria-hidden="true" />
-            {donor.phone}
-          </p>
-        )}
-        <p className="mt-1 flex items-center gap-1.5 text-[11px] text-ink/45">
-          <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          Reserved {formatDateTime(s.reservedAt)}
-        </p>
-        {holdLabel && (
-          <p className="mt-0.5 flex items-center gap-1.5 text-[11px] font-medium text-gold-700">
-            <Timer className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            {holdLabel}
-          </p>
-        )}
-      </div>
-
-      {onConfirm ? (
-        <div className="mt-3 grid grid-cols-3 gap-2">
+    <SponsorshipSummaryCard
+      product={product}
+      sponsorships={[s]}
+      remaining={remaining}
+      status="pending"
+      footer={onConfirm ? <div className="mt-3 grid grid-cols-3 gap-2">
           {onEdit && (
             <button
               onClick={onEdit}
@@ -553,15 +497,24 @@ function ConfirmationCard({ sponsorship: s, product, remaining, holdLabel, onCon
             <XCircle className="h-4 w-4" aria-hidden="true" />
             {cancelling ? 'Cancelling…' : 'Cancel'}
           </button>
-        </div>
-      ) : (
-        // Read-only record of money already confirmed on an unfinished item.
-        <p className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700">
-          <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Confirmed{s.confirmedAt ? ` ${formatDateTime(s.confirmedAt)}` : ''}
-        </p>
+        </div> : <p className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700"><BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />Confirmed{s.confirmedAt ? ` ${formatDateTime(s.confirmedAt)}` : ''}</p>}
+    />
+  )
+}
+
+function ConfirmedGroupCard({ product, sponsors, remaining, onEdit }) {
+  return (
+    <SponsorshipSummaryCard
+      product={product}
+      sponsorships={sponsors}
+      remaining={remaining}
+      status="confirmed"
+      footer={onEdit && (
+        <button type="button" onClick={onEdit} className="btn-ghost btn-sm mt-3 w-full" aria-label="Edit donor">
+          Edit donor
+        </button>
       )}
-    </article>
+    />
   )
 }
 

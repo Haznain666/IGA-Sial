@@ -4,7 +4,6 @@ import Header from './components/Header.jsx'
 import Footer from './components/Footer.jsx'
 import ScrollToTop from './components/ScrollToTop.jsx'
 import WhatsAppButton from './components/WhatsAppButton.jsx'
-import { useApp } from './store/AppContext.jsx'
 import Home from './pages/Home.jsx'
 import ProductSelection from './pages/ProductSelection.jsx'
 import SponsorPage from './pages/SponsorPage.jsx'
@@ -47,10 +46,6 @@ function Loading() {
 }
 
 function AppRoutes() {
-  const { loading } = useApp()
-
-  if (loading) return <Loading />
-
   return (
     <Suspense fallback={<Loading />}>
       <Routes>

@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ScrollText, User2, Gift, HeartHandshake, Mail, Phone, Fingerprint, Landmark, Calendar,
-  Wrench, Beef, Users, Trash2, AlertTriangle,
+  ScrollText, Gift, HeartHandshake, Trash2, AlertTriangle,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import Modal from '../components/Modal.jsx'
-import ProductCard from '../components/ProductCard.jsx'
+import SponsorshipSummaryCard from '../components/SponsorshipSummaryCard.jsx'
 import { useApp } from '../store/AppContext.jsx'
 import { useToast } from '../store/ToastContext.jsx'
 import { formatMoney } from '../lib/currency.js'
@@ -18,7 +17,7 @@ import { fullName, formatDateTime } from '../lib/helpers.js'
 export default function SponsorshipsMade() {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { completedProducts, sponsorsOf, bankById, loading, deleteProduct } = useApp()
+  const { products, completedProducts, sponsorsOf, bankById, loading, deleteProduct, statusOf } = useApp()
   const [search, setSearch] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
@@ -78,19 +77,25 @@ export default function SponsorshipsMade() {
 
   const totalPKR = completedProducts.reduce((sum, p) => sum + (Number(p.valuePKR) || 0), 0)
   const exportCsv = () => {
-    const fields = ['Product ID', 'Asset ID', 'Sponsor ID', 'Sponsor Name', 'Contact Number', 'Contact Email', 'Sponsored Amount', 'Sponsorship Date']
-    const rows = completedProducts.flatMap((product) =>
-      sponsorsOf(product.id).filter((s) => s.status === 'confirmed').map((s) => [
-        product.id,
-        product.assetId || '',
-        s.donor?.id || s.id,
-        fullName(s.donor) || 'Anonymous',
-        s.donor?.phone || '',
-        s.donor?.email || '',
-        s.amountPKR,
-        s.confirmedAt || s.createdAt || '',
-      ]),
-    )
+    const fields = ['Product ID', 'Asset ID', 'Sponsor ID', 'Sponsor Name', 'Contact Number', 'Contact Email', 'Sponsored Amount', 'Sponsorship Date', 'Completion Status']
+    const rows = products
+      .filter((product) => statusOf(product.id) === 'sponsored' || statusOf(product.id) === 'partial')
+      .flatMap((product) => {
+        const sponsors = sponsorsOf(product.id).filter((s) => s.status === 'confirmed')
+        const totalConfirmed = sponsors.reduce((sum, s) => sum + (Number(s.amountPKR) || 0), 0)
+        const completionStatus = totalConfirmed >= (Number(product.valuePKR) || 0) ? 'Fully sponsored' : 'Still collecting sponsorships'
+        return sponsors.map((s) => [
+          product.id,
+          product.assetId || '',
+          s.donor?.id || s.id,
+          fullName(s.donor) || 'Anonymous',
+          s.donor?.phone || '',
+          s.donor?.email || '',
+          s.amountPKR,
+          s.confirmedAt || s.createdAt || '',
+          completionStatus,
+        ])
+      })
     const escape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
     const csv = [fields, ...rows].map((row) => row.map(escape).join(',')).join('\r\n')
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
@@ -159,21 +164,20 @@ export default function SponsorshipsMade() {
                   .pop()
 
                 return (
-                  <ProductCard
+                  <SponsorshipSummaryCard
                     key={p.id}
                     product={p}
-                    showOwner={false}
+                    sponsorships={sponsors}
                     footer={
-                      <div className="space-y-3 relative">
-                        <div className="flex items-center gap-2 text-xs text-ink/60">
-                          <Users className="h-3.5 w-3.5 text-brand-500" aria-hidden="true" />
-                          <span>{sponsors.length} {sponsors.length === 1 ? 'sponsor' : 'sponsors'}</span>
-                          {lastConfirmed && <span>· {formatDateTime(lastConfirmed)}</span>}
-                        </div>
+                      <div className="relative mt-3 flex items-center justify-between gap-3">
+                        <span className="text-xs text-ink/60">
+                          {sponsors.length} {sponsors.length === 1 ? 'sponsor' : 'sponsors'}
+                          {lastConfirmed && ` · ${formatDateTime(lastConfirmed)}`}
+                        </span>
                         <button
                           type="button"
                           onClick={() => setConfirmDelete(p)}
-                          className="absolute right-0 bottom-0 flex h-10 w-10 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 transition-colors hover:bg-red-50"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-red-200 bg-white text-red-600 transition-colors hover:bg-red-50"
                           aria-label={`Delete ${p.name}`}
                           title="Delete"
                         >
